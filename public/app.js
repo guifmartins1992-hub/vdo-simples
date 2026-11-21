@@ -2,8 +2,8 @@ const socket = io();
 const $ = id => document.getElementById(id);
 const state = {
   cameraZoom:1,cameraMirrored:true,cameraTiles:new Map(),roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
-  localCamera:null,outgoingCamera:null,localScreen:null,screenOwner:null,remoteScreens:new Map(),
-  remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),pendingCandidates:new Map(),
+  localCamera:null,outgoingCamera:null,localScreen:null,screenOwner:null,remoteScreens:new Map(),remoteScreenAudio:null,
+  remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),screenAudioTransceivers:new Map(),pendingCandidates:new Map(),
   activeTab:"screenPanel",cameraMode:null,avatarImage:null,backgroundImage:null,
   filterMode:"none",filterActive:false,segmenter:null,segmenterLoading:null,
   processedCanvas:null,processedStream:null,avatarCanvas:null,avatarStream:null,cameraOffCanvas:null,cameraOffStream:null
@@ -53,16 +53,16 @@ function mapPeerTransceivers(peerId,pc){
   const screenTx=transceivers.find(tx=>tx.mid==="0")||transceivers[0];
   const cameraTx=transceivers.find(tx=>tx.mid==="1")||transceivers[1];
   if(screenTx){screenTx.direction="sendrecv";state.screenTransceivers.set(peerId,screenTx);}
+  const audioTx=transceivers.find(tx=>tx.receiver.track.kind==="audio");
   if(cameraTx){cameraTx.direction="sendrecv";state.cameraTransceivers.set(peerId,cameraTx);}
-  console.info("Faixas WebRTC mapeadas",peerId,{
-    screen:{mid:screenTx?.mid,direction:screenTx?.direction},
-    camera:{mid:cameraTx?.mid,direction:cameraTx?.direction}
-  });
+  if(audioTx){audioTx.direction="sendrecv";state.screenAudioTransceivers.set(peerId,audioTx);}
+  console.info("Faixas WebRTC mapeadas",peerId,{screen:screenTx?.mid,camera:cameraTx?.mid,audio:audioTx?.mid});
 }
 async function syncLocalTracks(peerId){
-  const screenTx=state.screenTransceivers.get(peerId),cameraTx=state.cameraTransceivers.get(peerId);
+  const screenTx=state.screenTransceivers.get(peerId),cameraTx=state.cameraTransceivers.get(peerId),audioTx=state.screenAudioTransceivers.get(peerId);
   if(screenTx)await screenTx.sender.replaceTrack(state.localScreen?.getVideoTracks()[0]||null);
   if(cameraTx)await cameraTx.sender.replaceTrack(state.outgoingCamera?.getVideoTracks()[0]||null);
+  if(audioTx)await audioTx.sender.replaceTrack(state.localScreen?.getAudioTracks()[0]||null);
 }
 async function flushIceCandidates(peerId,pc){
   const queued=state.pendingCandidates.get(peerId)||[];
@@ -72,9 +72,16 @@ async function flushIceCandidates(peerId,pc){
 function makePeer(peerId,offerer=false){
   if(state.pcs.has(peerId))return state.pcs.get(peerId);
   const pc=new RTCPeerConnection(rtcConfig);
-  if(offerer){pc.addTransceiver("video",{direction:"sendrecv"});pc.addTransceiver("video",{direction:"sendrecv"});}
+  if(offerer){pc.addTransceiver("video",{direction:"sendrecv"});pc.addTransceiver("video",{direction:"sendrecv"});pc.addTransceiver("audio",{direction:"sendrecv"});}
   pc.onicecandidate=e=>{if(e.candidate)socket.emit("signal",{to:peerId,candidate:e.candidate})};
   pc.ontrack=e=>{
+    if(e.track.kind==="audio"){
+      const audio=$("remoteScreenAudio");audio.srcObject=e.streams?.[0]||new MediaStream([e.track]);
+      audio.volume=Number($("screenAudioVolume").value)/100;audio.muted=$("screenAudioMute").dataset.muted==="true";
+      audio.play().catch(()=>toast("Clique em Ativar áudio para ouvir."));$("screenAudioPanel").classList.remove("hidden");
+      $("screenAudioStatus").textContent="Áudio da transmissão recebido";
+      e.track.onended=()=>{audio.srcObject=null;$("screenAudioPanel").classList.add("hidden");};return;
+    }
     // Usa o MediaStream fornecido pelo WebRTC, preservando a associação original da faixa.
     const stream=e.streams?.[0]||new MediaStream([e.track]);
     const isScreen=e.transceiver.mid==="0";
@@ -135,7 +142,7 @@ socket.on("signal",async({from,description,candidate})=>{
 function discardPeer(peerId){
   const pc=state.pcs.get(peerId);
   if(pc){pc.ontrack=null;pc.onicecandidate=null;pc.close();}
-  state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);
+  state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);state.screenAudioTransceivers.delete(peerId);
   state.pendingCandidates.delete(peerId);state.remoteScreens.delete(peerId);state.remoteCameras.delete(peerId);
   const tile=state.cameraTiles.get(peerId);
   if(tile){tile.video.srcObject=null;tile.video.classList.add("hidden");tile.empty.classList.remove("hidden");}
@@ -165,8 +172,8 @@ async function refreshScreenToPeer(peerId){
   const tx=state.screenTransceivers.get(peerId);
   const track=state.localScreen?.getVideoTracks()[0]||null;
   if(!tx||!track||track.readyState!=="live")return;
-  try{await tx.sender.replaceTrack(track);}
-  catch(err){console.warn("Falha ao reativar envio da tela",peerId,err);}
+  try{await tx.sender.replaceTrack(track);const audioTx=state.screenAudioTransceivers.get(peerId);if(audioTx)await audioTx.sender.replaceTrack(state.localScreen?.getAudioTracks()[0]||null);}
+  catch(err){console.warn("Falha ao reativar envio da tela/áudio",peerId,err);}
 }
 async function reloadReceivedScreen(){
   if(!state.roomCode)return;
@@ -182,11 +189,12 @@ async function reloadReceivedScreen(){
 async function reloadMyScreen(){
   if(!state.localScreen){toast("Apenas quem está transmitindo pode recarregar a própria transmissão.");return;}
   try{
-    const fresh=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:false});
+    const fresh=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:true});
     const track=fresh.getVideoTracks()[0];
     if(!track){stopStream(fresh);toast("Não foi possível obter a nova captura.");return;}
     const previous=state.localScreen;
     for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
+    for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(fresh.getAudioTracks()[0]||null);
     state.localScreen=fresh;
     $("localScreenPreview").srcObject=fresh;
     track.onended=stopScreen;
@@ -379,6 +387,9 @@ async function startScreen(){
       const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:false});
       state.localScreen=stream;const track=stream.getVideoTracks()[0];
       for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
+      const audioTrack=stream.getAudioTracks()[0]||null;
+      for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(audioTrack);
+      $("screenAudioHint").textContent=audioTrack?"Áudio da origem selecionada será transmitido.":"O navegador não disponibilizou áudio para a origem selecionada.";
       $("localScreenPreview").srcObject=stream;$("localScreenPreview").classList.remove("hidden");$("screenPlaceholder").classList.add("hidden");
       $("shareBtn").classList.add("hidden");$("stopShareBtn").classList.remove("hidden");track.onended=stopScreen;toast("Você está compartilhando sua tela.");
     }catch(e){socket.emit("screen:stop");if(e.name!=="NotAllowedError")toast("Não foi possível iniciar a captura de tela.")}
@@ -387,10 +398,12 @@ async function startScreen(){
 async function stopScreen(){
   if(!state.localScreen)return;stopStream(state.localScreen);state.localScreen=null;
   for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(null).catch(()=>{});
+  for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(null).catch(()=>{});
   socket.emit("screen:stop");resetScreenDisplay();
 }
 function cleanupLocal(){
   stopCamera().catch(()=>{});stopStream(state.localScreen);
+  const audio=$("remoteScreenAudio");if(audio)audio.srcObject=null;
   for(const pc of state.pcs.values())pc.close();state.pcs.clear();
 }
 function enterRoom(data){
@@ -409,6 +422,8 @@ $("joinBtn").addEventListener("click",()=>{
 });
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
+$("screenAudioVolume").addEventListener("input",e=>{$("remoteScreenAudio").volume=Number(e.target.value)/100;$("screenAudioVolumeValue").textContent=e.target.value+"%";});
+$("screenAudioMute").addEventListener("click",()=>{const muted=$("screenAudioMute").dataset.muted!=="true";$("screenAudioMute").dataset.muted=String(muted);$("remoteScreenAudio").muted=muted;$("screenAudioMute").textContent=muted?"Ativar áudio":"Silenciar";});
 $("reloadScreenBtn").addEventListener("click",reloadReceivedScreen);$("reloadCamerasBtn").addEventListener("click",reloadReceivedMedia);
 $("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
 $("filterSelect").addEventListener("change",e=>{
