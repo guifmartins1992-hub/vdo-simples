@@ -384,7 +384,7 @@ async function startScreen(){
   socket.emit("screen:request",{},async result=>{
     if(!result?.ok)return toast(result?.error||"Não foi possível iniciar a transmissão.");
     try{
-      const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:false});
+      const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:true});
       state.localScreen=stream;const track=stream.getVideoTracks()[0];
       for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
       const audioTrack=stream.getAudioTracks()[0]||null;
