@@ -78,9 +78,9 @@ function makePeer(peerId,offerer=false){
     if(e.track.kind==="audio"){
       const audio=$("remoteScreenAudio");audio.srcObject=e.streams?.[0]||new MediaStream([e.track]);
       audio.volume=Number($("screenAudioVolume").value)/100;audio.muted=$("screenAudioMute").dataset.muted==="true";
-      audio.play().catch(()=>{audio.muted=true;$("screenAudioMute").dataset.muted="true";$("screenAudioMute").textContent="Ativar áudio";toast("Clique em Ativar áudio para liberar o som.");});$("screenAudioPanel").classList.remove("hidden");
-      $("screenAudioStatus").textContent="Áudio da transmissão recebido";
-      e.track.onended=()=>{audio.srcObject=null;$("screenAudioPanel").classList.add("hidden");};return;
+      audio.play().catch(()=>{audio.muted=true;$("screenAudioMute").dataset.muted="true";$("screenAudioMute").textContent="♪";$("screenAudioMute").title="Ativar áudio";toast("Clique no controle de áudio para liberar o som.");});
+      $("screenAudioPanel").classList.toggle("hidden",state.screenOwner===state.selfId||!state.screenOwner);
+      e.track.onended=()=>{audio.srcObject=null;};return;
     }
     // Usa o MediaStream fornecido pelo WebRTC, preservando a associação original da faixa.
     const stream=e.streams?.[0]||new MediaStream([e.track]);
@@ -240,7 +240,7 @@ socket.on("screen:refresh",async({from})=>{
 });
 socket.on("room:members",({members})=>updateMembers(members));
 socket.on("screen:started",({peerId})=>{
-  state.screenOwner=peerId;const name=state.members.get(peerId)?.name||"Participante";
+  state.screenOwner=peerId;$("screenAudioPanel").classList.toggle("hidden",peerId===state.selfId);const name=state.members.get(peerId)?.name||"Participante";
   $("screenStatus").textContent=peerId===state.selfId?"Você está transmitindo":name+" está transmitindo";$("screenStatus").classList.add("live");
   $("screenOwner").textContent="Transmitindo: "+name;$("screenOwner").classList.remove("hidden");if(peerId!==state.selfId)showRemoteScreen(peerId);
 });
@@ -252,7 +252,7 @@ function showRemoteScreen(peerId){
   $("remoteScreen").srcObject=stream;$("remoteScreen").play().catch(()=>{});$("remoteScreen").classList.remove("hidden");$("screenPlaceholder").classList.add("hidden");$("localScreenPreview").classList.add("hidden");
 }
 function resetScreenDisplay(){
-  state.screenOwner=null;$("remoteScreen").srcObject=null;$("remoteScreen").classList.add("hidden");
+  state.screenOwner=null;$("screenAudioPanel").classList.add("hidden");$("remoteScreen").srcObject=null;$("remoteScreen").classList.add("hidden");
   $("localScreenPreview").srcObject=null;$("localScreenPreview").classList.add("hidden");$("screenPlaceholder").classList.remove("hidden");
   $("screenOwner").classList.add("hidden");$("screenStatus").textContent="Ninguém transmitindo";$("screenStatus").classList.remove("live");
   $("stopShareBtn").classList.add("hidden");$("shareBtn").classList.remove("hidden");
@@ -436,7 +436,7 @@ $("joinBtn").addEventListener("click",()=>{
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
 $("screenAudioVolume").addEventListener("input",e=>{$("remoteScreenAudio").volume=Number(e.target.value)/100;$("screenAudioVolumeValue").textContent=e.target.value+"%";});
-$("screenAudioMute").addEventListener("click",()=>{const muted=$("screenAudioMute").dataset.muted!=="true";$("screenAudioMute").dataset.muted=String(muted);$("remoteScreenAudio").muted=muted;$("screenAudioMute").textContent=muted?"Ativar áudio":"Silenciar";if(!muted)$("remoteScreenAudio").play().catch(()=>{});});
+$("screenAudioMute").addEventListener("click",()=>{const muted=$("screenAudioMute").dataset.muted!=="true";$("screenAudioMute").dataset.muted=String(muted);$("remoteScreenAudio").muted=muted;$("screenAudioMute").textContent="♪";$("screenAudioMute").title=muted?"Ativar áudio":"Silenciar";$("screenAudioMute").setAttribute("aria-label",muted?"Ativar áudio":"Silenciar áudio");if(!muted)$("remoteScreenAudio").play().catch(()=>{});});
 $("reloadScreenBtn").addEventListener("click",reloadReceivedScreen);$("reloadCamerasBtn").addEventListener("click",reloadReceivedMedia);
 $("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
 $("filterSelect").addEventListener("change",e=>{
