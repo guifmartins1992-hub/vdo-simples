@@ -1,7 +1,7 @@
 const socket = io();
 const $ = id => document.getElementById(id);
 const state = {
-  cameraZoom:1,cameraTiles:new Map(),roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
+  cameraZoom:1,cameraMirrored:true,cameraTiles:new Map(),roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
   localCamera:null,outgoingCamera:null,localScreen:null,screenOwner:null,remoteScreens:new Map(),
   remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),pendingCandidates:new Map(),
   activeTab:"screenPanel",cameraMode:null,avatarImage:null,backgroundImage:null,
@@ -35,7 +35,7 @@ function renderCameras(){
     if(stream&&data.video.srcObject!==stream){data.video.srcObject=stream;data.video.play().catch(()=>{});}
     if(!stream&&data.video.srcObject)data.video.srcObject=null;
     data.empty.classList.toggle("hidden",!!stream);data.video.classList.toggle("hidden",!stream);
-    data.video.style.transform=(member.id===state.selfId?"scaleX(-1) ":"")+"scale("+state.cameraZoom+")";
+    data.video.style.transform="";
   }
   $("cameraStatus").textContent=state.cameraMode==="avatar"?"Avatar ativo":state.cameraEnabled?"Sua câmera está ligada":"Vídeo desligado";
 }
@@ -280,42 +280,48 @@ async function loadSegmenter(){
   }).catch(err=>{state.segmenterLoading=null;throw err});
   return state.segmenterLoading;
 }
+function drawCameraSource(ctx,source,w,h){
+  if(source.readyState<2)return;
+  const sw=source.videoWidth||w,sh=source.videoHeight||h,scale=Math.max(w/sw,h/sh)*state.cameraZoom,dw=sw*scale,dh=sh*scale;
+  ctx.save();ctx.translate(w/2,h/2);ctx.scale(state.cameraMirrored?-1:1,1);ctx.drawImage(source,-dw/2,-dh/2,dw,dh);ctx.restore();
+}
 async function applyCameraFilter(){
   if(!state.localCamera)return;
-  if(!state.filterActive||state.filterMode==="none"){clearProcessed();await replaceOutgoingCamera(state.localCamera);return}
-  if(state.filterMode==="image"&&!state.backgroundImage){toast("Escolha uma imagem de fundo primeiro.");return}
   try{
-    toast("Preparando efeito de câmera...");
     state.stopFilterLoop?.();state.stopFilterLoop=null;
-    const seg=await loadSegmenter();clearProcessed();
+    const useSegmentation=state.filterActive&&state.filterMode!=="none";
+    if(useSegmentation&&state.filterMode==="image"&&!state.backgroundImage){toast("Escolha uma imagem de fundo primeiro.");return}
+    const seg=useSegmentation?await loadSegmenter():null;clearProcessed();
     const source=document.createElement("video");source.srcObject=state.localCamera;source.muted=true;source.playsInline=true;await source.play();
     const canvas=document.createElement("canvas");canvas.width=640;canvas.height=360;
-    const ctx=canvas.getContext("2d");const stream=canvas.captureStream(24);
-    state.processedCanvas=canvas;state.processedStream=stream;
-    const foreground=document.createElement("canvas");foreground.width=640;foreground.height=360;
-    const fg=foreground.getContext("2d");
-    const blurred=document.createElement("canvas");blurred.width=640;blurred.height=360;
-    const bg=blurred.getContext("2d");
-    seg.onResults(results=>{
-      const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
-      if(state.filterMode==="blur"){
-        bg.clearRect(0,0,w,h);bg.save();bg.filter="blur(18px)";bg.drawImage(source,0,0,w,h);bg.restore();ctx.drawImage(blurred,0,0,w,h);
-      }else if(state.filterMode==="image"&&state.backgroundImage)ctx.drawImage(state.backgroundImage,0,0,w,h);
-      else{ctx.fillStyle="#080b09";ctx.fillRect(0,0,w,h)}
-      fg.clearRect(0,0,w,h);fg.globalCompositeOperation="source-over";fg.drawImage(source,0,0,w,h);
-      fg.globalCompositeOperation="destination-in";fg.drawImage(results.segmentationMask,0,0,w,h);
-      fg.globalCompositeOperation="source-over";ctx.drawImage(foreground,0,0,w,h);
-    });
+    const ctx=canvas.getContext("2d"),stream=canvas.captureStream(24);state.processedCanvas=canvas;state.processedStream=stream;
+    const foreground=document.createElement("canvas");foreground.width=640;foreground.height=360;const fg=foreground.getContext("2d");
+    const mask=document.createElement("canvas");mask.width=640;mask.height=360;const mctx=mask.getContext("2d");
+    const blurred=document.createElement("canvas");blurred.width=640;blurred.height=360;const bg=blurred.getContext("2d");
+    const background=()=>{
+      ctx.clearRect(0,0,640,360);
+      if(useSegmentation&&state.filterMode==="blur"){bg.clearRect(0,0,640,360);bg.save();bg.filter="blur(18px)";drawCameraSource(bg,source,640,360);bg.restore();ctx.drawImage(blurred,0,0)}
+      else if(useSegmentation&&state.filterMode==="image"&&state.backgroundImage)ctx.drawImage(state.backgroundImage,0,0,640,360);
+      else if(useSegmentation&&state.filterMode==="remove"){ctx.fillStyle="#080b09";ctx.fillRect(0,0,640,360)}
+      else{ctx.fillStyle="#101a13";ctx.fillRect(0,0,640,360)}
+    };
+    const segmented=results=>{
+      background();fg.clearRect(0,0,640,360);drawCameraSource(fg,source,640,360);
+      const sw=source.videoWidth||640,sh=source.videoHeight||360,scale=Math.max(640/sw,360/sh)*state.cameraZoom,dw=sw*scale,dh=sh*scale;
+      mctx.clearRect(0,0,640,360);mctx.save();mctx.translate(320,180);mctx.scale(state.cameraMirrored?-1:1,1);mctx.drawImage(results.segmentationMask,-dw/2,-dh/2,dw,dh);mctx.restore();
+      fg.globalCompositeOperation="destination-in";fg.drawImage(mask,0,0);fg.globalCompositeOperation="source-over";ctx.drawImage(foreground,0,0);
+    };
+    if(seg)seg.onResults(segmented);
     await replaceOutgoingCamera(stream);
     let running=true;
     const process=async()=>{
-      if(!running||state.localCamera===null||!state.filterActive||state.cameraMode!=="camera")return;
-      if(source.readyState>=2)try{await seg.send({image:source})}catch(e){console.warn(e)}
+      if(!running||!state.localCamera||!state.cameraEnabled||state.cameraMode!=="camera")return;
+      if(source.readyState>=2){if(seg){try{await seg.send({image:source})}catch(e){console.warn(e)}}else{ctx.clearRect(0,0,640,360);drawCameraSource(ctx,source,640,360)}}
       requestAnimationFrame(process);
     };
-    state.stopFilterLoop=()=>{running=false;source.pause();source.srcObject=null};
-    requestAnimationFrame(process);toast("Efeito de câmera ativado.");
-  }catch(err){console.error(err);state.filterActive=false;$("filterToggleBtn").textContent="Ativar filtro";toast(err.message||"Falha ao iniciar o filtro.")}
+    state.stopFilterLoop=()=>{running=false;source.pause();source.srcObject=null};requestAnimationFrame(process);
+    toast(useSegmentation?"Efeitos de câmera atualizados.":"Zoom e espelhamento atualizados.");
+  }catch(err){console.error(err);toast(err.message||"Falha ao aplicar efeitos de câmera.")}
 }
 async function startCamera(){
   try{
@@ -343,6 +349,12 @@ async function stopCamera(){
   await replaceOutgoingCamera(createCameraOffStream());
   $("cameraBtn").classList.remove("hidden");$("cameraOffBtn").classList.add("hidden");$("avatarBtn").textContent="Usar avatar";renderCameras();
 }
+function drawAvatarOutput(){
+  if(!state.avatarCanvas||!state.avatarImage)return;
+  const ctx=state.avatarCanvas.getContext("2d"),img=state.avatarImage;ctx.fillStyle="#101a13";ctx.fillRect(0,0,640,360);
+  const scale=Math.min(560/img.width,300/img.height)*state.cameraZoom,w=img.width*scale,h=img.height*scale;
+  ctx.save();ctx.translate(320,180);ctx.scale(state.cameraMirrored?-1:1,1);ctx.drawImage(img,-w/2,-h/2,w,h);ctx.restore();
+}
 async function startAvatar(file){
   if(!file)return;
   try{
@@ -351,12 +363,7 @@ async function startAvatar(file){
     await stopCamera();state.avatarImage=img;state.cameraMode="avatar";state.cameraEnabled=true;
     const canvas=document.createElement("canvas");canvas.width=640;canvas.height=360;
     const ctx=canvas.getContext("2d");
-    const draw=()=>{
-      ctx.fillStyle="#101a13";ctx.fillRect(0,0,640,360);
-      const scale=Math.min(560/img.width,300/img.height),w=img.width*scale,h=img.height*scale;
-      ctx.drawImage(img,(640-w)/2,(360-h)/2,w,h);
-    };
-    draw();state.avatarCanvas=canvas;state.avatarStream=canvas.captureStream(10);
+    state.avatarCanvas=canvas;state.avatarStream=canvas.captureStream(10);drawAvatarOutput();
     $("cameraBtn").classList.add("hidden");$("cameraOffBtn").classList.remove("hidden");$("avatarBtn").textContent="Avatar selecionado";
     await replaceOutgoingCamera(state.avatarStream);renderCameras();URL.revokeObjectURL(url);toast("Avatar ativado.");
   }catch(e){console.error(e);toast("Não foi possível carregar essa imagem.")}
@@ -416,9 +423,14 @@ $("filterToggleBtn").addEventListener("click",()=>{
 $("avatarBtn").addEventListener("click",()=>{if(state.cameraMode==="avatar")$("avatarUpload").click();else $("avatarUpload").click()});
 $("avatarUpload").addEventListener("change",e=>startAvatar(e.target.files?.[0]));
 $("cameraZoom").addEventListener("input",e=>{
-  state.cameraZoom=Number(e.target.value);
-  $("cameraZoomValue").textContent=state.cameraZoom.toFixed(1)+"×";
-  renderCameras();
+  state.cameraZoom=Number(e.target.value);$("cameraZoomValue").textContent=state.cameraZoom.toFixed(1)+"×";
+  if(state.localCamera&&state.cameraMode==="camera")applyCameraFilter();else if(state.cameraMode==="avatar")drawAvatarOutput();
+});
+$("mirrorCameraBtn").addEventListener("click",()=>{
+  state.cameraMirrored=!state.cameraMirrored;
+  $("mirrorCameraBtn").textContent=state.cameraMirrored?"Espelhar câmera: ligado":"Espelhar câmera: desligado";
+  $("mirrorCameraBtn").classList.toggle("primary",state.cameraMirrored);$("mirrorCameraBtn").classList.toggle("secondary",!state.cameraMirrored);
+  if(state.localCamera&&state.cameraMode==="camera")applyCameraFilter();else if(state.cameraMode==="avatar")drawAvatarOutput();
 });
 $("copyCodeBtn").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(state.roomCode);toast("Código copiado.")}catch{toast("Código da sala: "+state.roomCode)}});
 $("leaveBtn").addEventListener("click",()=>{if(state.isHost&&!confirm("Sair encerrará a sala para todos. Continuar?"))return;socket.emit("room:leave");cleanupLocal();location.reload()});
