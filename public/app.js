@@ -1,7 +1,7 @@
 const socket = io();
 const $ = id => document.getElementById(id);
 const state = {
-  roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
+  cameraZoom:1,roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
   localCamera:null,outgoingCamera:null,localScreen:null,screenOwner:null,remoteScreens:new Map(),
   remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),
   activeTab:"screenPanel",cameraMode:null,avatarImage:null,backgroundImage:null,
@@ -252,6 +252,11 @@ $("filterToggleBtn").addEventListener("click",()=>{
 });
 $("avatarBtn").addEventListener("click",()=>{if(state.cameraMode==="avatar")$("avatarUpload").click();else $("avatarUpload").click()});
 $("avatarUpload").addEventListener("change",e=>startAvatar(e.target.files?.[0]));
+$("cameraZoom").addEventListener("input",e=>{
+  state.cameraZoom=Number(e.target.value);
+  $("cameraZoomValue").textContent=state.cameraZoom.toFixed(1)+"×";
+  renderCameras();
+});
 $("copyCodeBtn").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(state.roomCode);toast("Código copiado.")}catch{toast("Código da sala: "+state.roomCode)}});
 $("leaveBtn").addEventListener("click",()=>{if(state.isHost&&!confirm("Sair encerrará a sala para todos. Continuar?"))return;socket.emit("room:leave");cleanupLocal();location.reload()});
 $("endRoomBtn").addEventListener("click",()=>{if(confirm("Encerrar a sala para todos os participantes?")){socket.emit("room:leave");cleanupLocal();location.reload()}});
