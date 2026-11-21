@@ -6,7 +6,7 @@ const state = {
   remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),pendingCandidates:new Map(),
   activeTab:"screenPanel",cameraMode:null,avatarImage:null,backgroundImage:null,
   filterMode:"none",filterActive:false,segmenter:null,segmenterLoading:null,
-  processedCanvas:null,processedStream:null,avatarCanvas:null,avatarStream:null
+  processedCanvas:null,processedStream:null,avatarCanvas:null,avatarStream:null,cameraOffCanvas:null,cameraOffStream:null
 };
 const rtcConfig = {iceServers:[{urls:"stun:stun.l.google.com:19302"}]};
 
@@ -324,9 +324,23 @@ async function startCamera(){
     await applyCameraFilter();renderCameras();toast("Câmera ligada.");
   }catch(e){toast("Não foi possível acessar a câmera ou iniciar o efeito. Verifique as permissões.")}
 }
+function createCameraOffStream(){
+  if(state.cameraOffStream?.getVideoTracks()[0]?.readyState==="live")return state.cameraOffStream;
+  const canvas=document.createElement("canvas");canvas.width=640;canvas.height=360;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle="#c0c0c0";ctx.fillRect(0,0,640,360);
+  ctx.fillStyle="#555555";ctx.font="bold 26px Arial";ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText("Vídeo desligado",320,180);
+  state.cameraOffCanvas=canvas;state.cameraOffStream=canvas.captureStream(10);
+  return state.cameraOffStream;
+}
 async function stopCamera(){
-  state.stopFilterLoop?.();state.stopFilterLoop=null;stopStream(state.localCamera);state.localCamera=null;
-  state.cameraEnabled=false;state.cameraMode=null;clearProcessed();await replaceOutgoingCamera(null);
+  state.stopFilterLoop?.();state.stopFilterLoop=null;
+  stopStream(state.localCamera);state.localCamera=null;
+  state.cameraEnabled=false;state.cameraMode=null;clearProcessed();
+  // Mantém a faixa WebRTC de câmera ativa e envia uma imagem prata no lugar
+  // de remover a faixa. Assim os outros nunca ficam com o último quadro congelado.
+  await replaceOutgoingCamera(createCameraOffStream());
   $("cameraBtn").classList.remove("hidden");$("cameraOffBtn").classList.add("hidden");$("avatarBtn").textContent="Usar avatar";renderCameras();
 }
 async function startAvatar(file){
