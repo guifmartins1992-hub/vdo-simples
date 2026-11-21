@@ -189,12 +189,12 @@ async function reloadReceivedScreen(){
 async function reloadMyScreen(){
   if(!state.localScreen){toast("Apenas quem está transmitindo pode recarregar a própria transmissão.");return;}
   try{
-    const fresh=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:true});
+    const fresh=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:true,windowAudio:"window",systemAudio:"exclude"});
     const track=fresh.getVideoTracks()[0];
     if(!track){stopStream(fresh);toast("Não foi possível obter a nova captura.");return;}
     const previous=state.localScreen;
     for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
-    const isolated=getIsolatedTabAudio(fresh);
+    const isolated=getIsolatedShareAudio(fresh);
     for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(isolated.track);
     state.localScreen=fresh;
     $("localScreenPreview").srcObject=fresh;
@@ -381,12 +381,14 @@ async function startAvatar(file){
     await replaceOutgoingCamera(state.avatarStream);renderCameras();URL.revokeObjectURL(url);toast("Avatar ativado.");
   }catch(e){console.error(e);toast("Não foi possível carregar essa imagem.")}
 }
-function getIsolatedTabAudio(stream){
+function getIsolatedShareAudio(stream){
   const videoTrack=stream?.getVideoTracks()[0];
   const surface=videoTrack?.getSettings?.().displaySurface;
   const audioTrack=stream?.getAudioTracks()[0]||null;
-  if(surface!=="browser"){
-    if(audioTrack){audioTrack.stop();}
+  // browser = áudio da guia; window = áudio do aplicativo/janela selecionada.
+  // monitor nunca deve enviar áudio, pois isso pode incluir a mixagem do sistema.
+  if(surface!=="browser"&&surface!=="window"){
+    if(audioTrack)audioTrack.stop();
     return {track:null,surface};
   }
   return {track:audioTrack,surface};
@@ -395,12 +397,12 @@ async function startScreen(){
   socket.emit("screen:request",{},async result=>{
     if(!result?.ok)return toast(result?.error||"Não foi possível iniciar a transmissão.");
     try{
-      const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:true});
+      const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:true,windowAudio:"window",systemAudio:"exclude"});
       state.localScreen=stream;const track=stream.getVideoTracks()[0];
       for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
-      const isolated=getIsolatedTabAudio(stream),audioTrack=isolated.track;
+      const isolated=getIsolatedShareAudio(stream),audioTrack=isolated.track;
       for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(audioTrack);
-      $("screenAudioHint").textContent=isolated.surface==="browser"?(audioTrack?"Áudio isolado da guia será transmitido.":"A guia não forneceu áudio."):"Áudio bloqueado por segurança: selecione uma GUIA do navegador, não janela ou tela inteira.";
+      $("screenAudioHint").textContent=isolated.surface==="browser"?(audioTrack?"Áudio isolado da guia será transmitido.":"A guia não forneceu áudio."):isolated.surface==="window"?(audioTrack?"Áudio isolado da janela selecionada será transmitido.":"A janela não forneceu áudio. Verifique se o navegador oferece captura de áudio por janela."):"Áudio não transmitido: a tela inteira pode incluir sons de outros aplicativos.";
       $("localScreenPreview").srcObject=stream;$("localScreenPreview").classList.remove("hidden");$("screenPlaceholder").classList.add("hidden");
       $("shareBtn").classList.add("hidden");$("stopShareBtn").classList.remove("hidden");track.onended=stopScreen;toast("Você está compartilhando sua tela.");
     }catch(e){socket.emit("screen:stop");if(e.name!=="NotAllowedError")toast("Não foi possível iniciar a captura de tela.")}
