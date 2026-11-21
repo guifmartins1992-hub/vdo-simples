@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#171b27">
+  <meta name="theme-color" content="#080b09">
   <title>VDO Simples</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -32,45 +32,60 @@
         <button id="leaveBtn" class="danger-outline">Sair da sala</button>
       </header>
 
-      <nav class="tabs" aria-label="Abas da sala">
-        <button class="tab active" data-tab="screenPanel">▣ <span>Transmissão</span></button>
-        <button class="tab" data-tab="cameraPanel">◉ <span>Câmeras</span><b id="memberCount" class="count">1</b></button>
-      </nav>
-
-      <section id="screenPanel" class="panel">
-        <div class="panel-heading">
-          <div><p class="eyebrow">COMPARTILHAMENTO</p><h2>Transmissão de tela</h2></div>
-          <span id="screenStatus" class="status">Ninguém transmitindo</span>
-        </div>
-        <div class="screen-stage">
-          <div id="screenPlaceholder" class="placeholder">
-            <div class="placeholder-icon">▣</div>
-            <h3>A tela compartilhada aparecerá aqui</h3>
-            <p>Qualquer participante pode iniciar uma transmissão. Apenas uma por vez.</p>
+      <div class="workspace">
+        <section id="screenPanel" class="screen-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">COMPARTILHAMENTO</p><h2>Transmissão</h2></div>
+            <span id="screenStatus" class="status">Ninguém transmitindo</span>
           </div>
-          <video id="remoteScreen" autoplay playsinline class="hidden"></video>
-          <video id="localScreenPreview" autoplay muted playsinline class="hidden"></video>
-          <div id="screenOwner" class="screen-owner hidden"></div>
-        </div>
-        <div class="controls">
-          <button id="shareBtn" class="primary">▣ Compartilhar minha tela</button>
-          <button id="stopShareBtn" class="secondary hidden">Parar transmissão</button>
-        </div>
-        <p class="hint">A transmissão envia somente a imagem, sem áudio do computador.</p>
-      </section>
+          <div class="screen-stage">
+            <div id="screenPlaceholder" class="placeholder">
+              <div class="placeholder-icon">▣</div>
+              <h3>A tela compartilhada aparecerá aqui</h3>
+              <p>Qualquer participante pode iniciar uma transmissão. Apenas uma por vez.</p>
+            </div>
+            <video id="remoteScreen" autoplay playsinline class="hidden"></video>
+            <video id="localScreenPreview" autoplay muted playsinline class="hidden"></video>
+            <div id="screenOwner" class="screen-owner hidden"></div>
+          </div>
+          <div class="controls">
+            <button id="shareBtn" class="primary">▣ Compartilhar minha tela</button>
+            <button id="stopShareBtn" class="secondary hidden">Parar transmissão</button>
+          </div>
+          <p class="hint">Somente imagem, sem áudio do computador.</p>
+        </section>
 
-      <section id="cameraPanel" class="panel hidden">
-        <div class="panel-heading">
-          <div><p class="eyebrow">PARTICIPANTES</p><h2>Câmeras</h2></div>
-          <span id="cameraStatus" class="status">Câmera desligada</span>
-        </div>
-        <div id="videoGrid" class="video-grid"></div>
-        <div class="controls">
-          <button id="cameraBtn" class="primary">◉ Ligar minha câmera</button>
-          <button id="cameraOffBtn" class="secondary hidden">Desligar câmera</button>
-        </div>
-        <p class="hint">As câmeras transmitem somente vídeo. Microfones e áudio estão desativados.</p>
-      </section>
+        <aside id="cameraPanel" class="camera-panel">
+          <div class="camera-heading">
+            <div><p class="eyebrow">SALA AO VIVO</p><h2>Câmeras <b id="memberCount" class="count">1</b></h2></div>
+            <span id="cameraStatus" class="status">Câmera desligada</span>
+          </div>
+          <div id="videoGrid" class="video-grid"></div>
+          <div class="camera-actions">
+            <button id="cameraBtn" class="primary">◉ Ligar câmera</button>
+            <button id="cameraOffBtn" class="secondary hidden">Desligar vídeo</button>
+          </div>
+          <div class="camera-tools">
+            <p class="tool-title">EFEITOS DE CÂMERA</p>
+            <label for="filterSelect">Fundo</label>
+            <select id="filterSelect">
+              <option value="none">Sem filtro</option>
+              <option value="remove">Remover fundo</option>
+              <option value="blur">Fundo borrado</option>
+              <option value="image">Imagem personalizada</option>
+            </select>
+            <label class="upload-label" for="backgroundUpload">Escolher imagem de fundo</label>
+            <input id="backgroundUpload" type="file" accept="image/*" hidden>
+            <div class="tool-row">
+              <button id="filterToggleBtn" class="secondary" disabled>Ativar filtro</button>
+              <button id="avatarBtn" class="secondary">Usar avatar</button>
+            </div>
+            <label class="upload-label" for="avatarUpload">Escolher imagem do avatar</label>
+            <input id="avatarUpload" type="file" accept="image/*" hidden>
+            <p class="tool-note">Os efeitos são processados no seu navegador. Para melhor resultado, use uma imagem horizontal.</p>
+          </div>
+        </aside>
+      </div>
 
       <footer class="room-footer">
         <span id="connectionState">Conectando…</span>
