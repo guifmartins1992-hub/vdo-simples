@@ -194,7 +194,8 @@ async function reloadMyScreen(){
     if(!track){stopStream(fresh);toast("Não foi possível obter a nova captura.");return;}
     const previous=state.localScreen;
     for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
-    for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(fresh.getAudioTracks()[0]||null);
+    const isolated=getIsolatedTabAudio(fresh);
+    for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(isolated.track);
     state.localScreen=fresh;
     $("localScreenPreview").srcObject=fresh;
     track.onended=stopScreen;
@@ -380,6 +381,16 @@ async function startAvatar(file){
     await replaceOutgoingCamera(state.avatarStream);renderCameras();URL.revokeObjectURL(url);toast("Avatar ativado.");
   }catch(e){console.error(e);toast("Não foi possível carregar essa imagem.")}
 }
+function getIsolatedTabAudio(stream){
+  const videoTrack=stream?.getVideoTracks()[0];
+  const surface=videoTrack?.getSettings?.().displaySurface;
+  const audioTrack=stream?.getAudioTracks()[0]||null;
+  if(surface!=="browser"){
+    if(audioTrack){audioTrack.stop();}
+    return {track:null,surface};
+  }
+  return {track:audioTrack,surface};
+}
 async function startScreen(){
   socket.emit("screen:request",{},async result=>{
     if(!result?.ok)return toast(result?.error||"Não foi possível iniciar a transmissão.");
@@ -387,9 +398,9 @@ async function startScreen(){
       const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:true});
       state.localScreen=stream;const track=stream.getVideoTracks()[0];
       for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
-      const audioTrack=stream.getAudioTracks()[0]||null;
+      const isolated=getIsolatedTabAudio(stream),audioTrack=isolated.track;
       for(const tx of state.screenAudioTransceivers.values())await tx.sender.replaceTrack(audioTrack);
-      $("screenAudioHint").textContent=audioTrack?"Áudio da origem selecionada será transmitido.":"O navegador não disponibilizou áudio para a origem selecionada.";
+      $("screenAudioHint").textContent=isolated.surface==="browser"?(audioTrack?"Áudio isolado da guia será transmitido.":"A guia não forneceu áudio."):"Áudio bloqueado por segurança: selecione uma GUIA do navegador, não janela ou tela inteira.";
       $("localScreenPreview").srcObject=stream;$("localScreenPreview").classList.remove("hidden");$("screenPlaceholder").classList.add("hidden");
       $("shareBtn").classList.add("hidden");$("stopShareBtn").classList.remove("hidden");track.onended=stopScreen;toast("Você está compartilhando sua tela.");
     }catch(e){socket.emit("screen:stop");if(e.name!=="NotAllowedError")toast("Não foi possível iniciar a captura de tela.")}
