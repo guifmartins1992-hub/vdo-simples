@@ -53,7 +53,8 @@
             <button id="stopShareBtn" class="secondary hidden">Parar transmissão</button>
             <button id="reloadScreenBtn" class="secondary">↻ Recuperar transmissão recebida</button>
           </div>
-          <p class="hint">Somente imagem, sem áudio do computador.</p>
+          <section id="screenAudioPanel" class="screen-audio-panel hidden"><div class="audio-title"><strong>ÁUDIO DA TRANSMISSÃO</strong><span id="screenAudioStatus">Aguardando áudio</span></div><audio id="remoteScreenAudio" autoplay playsinline></audio><div class="audio-controls"><button id="screenAudioMute" class="secondary" data-muted="false">Silenciar</button><label for="screenAudioVolume">Volume <span id="screenAudioVolumeValue">100%</span></label><input id="screenAudioVolume" type="range" min="0" max="100" value="100"></div></section>
+          <p id="screenAudioHint" class="hint">Para transmitir som isolado, compartilhe uma guia do navegador e marque “Compartilhar áudio da guia”.</p>
         </section>
 
         <aside id="cameraPanel" class="camera-panel">
