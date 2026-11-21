@@ -54,7 +54,7 @@
             <button id="reloadScreenBtn" class="secondary">↻ Recuperar transmissão recebida</button>
           </div>
           <section id="screenAudioPanel" class="screen-audio-panel hidden"><div class="audio-title"><strong>ÁUDIO DA TRANSMISSÃO</strong><span id="screenAudioStatus">Aguardando áudio</span></div><audio id="remoteScreenAudio" autoplay playsinline></audio><div class="audio-controls"><button id="screenAudioMute" class="secondary" data-muted="false">Silenciar</button><label for="screenAudioVolume">Volume <span id="screenAudioVolumeValue">100%</span></label><input id="screenAudioVolume" type="range" min="0" max="100" value="100"></div></section>
-          <p id="screenAudioHint" class="hint">Para transmitir som isolado, compartilhe uma guia do navegador e marque “Compartilhar áudio da guia”.</p>
+          <p id="screenAudioHint" class="hint">Para áudio isolado, compartilhe uma guia ou uma janela. Ao escolher uma janela, marque a opção de compartilhar o áudio da janela (quando disponível). A tela inteira não transmite áudio.</p>
         </section>
 
         <aside id="cameraPanel" class="camera-panel">
@@ -103,6 +103,6 @@
   </main>
   <div id="toast" class="toast" role="status"></div>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=20261121-camera-effects3"></script>
+  <script src="/app.js?v=20261121-window-audio1"></script>
 </body>
 </html>
