@@ -108,17 +108,24 @@ function discardPeer(peerId){
   if(tile){tile.video.srcObject=null;tile.video.classList.add("hidden");tile.empty.classList.remove("hidden");}
   if(state.screenOwner===peerId){$("remoteScreen").srcObject=null;$("remoteScreen").classList.add("hidden");}
 }
+async function refreshCameraToPeer(peerId){
+  const tx=state.cameraTransceivers.get(peerId);
+  const track=state.outgoingCamera?.getVideoTracks()[0]||null;
+  if(!tx||!track||track.readyState!=="live")return;
+  try{
+    await tx.sender.replaceTrack(null);
+    await tx.sender.replaceTrack(track);
+  }catch(err){console.warn("Falha ao reativar envio da câmera",peerId,err);}
+}
 async function reloadReceivedMedia(){
   if(!state.roomCode)return;
   const peers=[...state.members.keys()].filter(id=>id!==state.selfId);
-  if(!peers.length){toast("Não há outros participantes para reconectar.");return;}
-  setConnection("Solicitando recuperação das mídias…");
-  socket.emit("peer:reset",{},result=>{
-    if(!result?.ok){toast("Não foi possível solicitar a reconexão.");return;}
-    for(const id of peers)discardPeer(id);
-    setConnection("Aguardando reconexão dos participantes…");
-    toast("Solicitação enviada. Reconectando transmissão e câmeras.");
-  });
+  if(!peers.length){toast("Não há outros participantes para recuperar.");return;}
+  setConnection("Recuperando somente as câmeras…");
+  socket.emit("camera:refresh");
+  await Promise.all(peers.map(refreshCameraToPeer));
+  setConnection("Câmeras atualizadas");
+  toast("Solicitei a atualização das câmeras sem reiniciar a transmissão de tela.");
 }
 
 async function reloadMyScreen(){
@@ -165,10 +172,8 @@ async function reloadMyCameras(){
   toast("Ligue sua câmera ou selecione um avatar para recarregar.");
 }
 socket.on("peer:left",({peerId})=>{discardPeer(peerId);if(state.screenOwner===peerId)resetScreenDisplay();renderCameras();});
-socket.on("peer:reset",async({from})=>{
-  discardPeer(from);renderCameras();
-  try{await initiatePeer(from);}
-  catch(err){console.error("Falha ao iniciar reconexão solicitada",err);}
+socket.on("camera:refresh",async({from})=>{
+  await refreshCameraToPeer(from);
 });
 socket.on("room:members",({members})=>updateMembers(members));
 socket.on("screen:started",({peerId})=>{
