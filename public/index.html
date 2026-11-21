@@ -69,8 +69,9 @@
           </div>
           <div class="camera-tools">
             <p class="tool-title">AJUSTE DE CÂMERA</p>
-            <label for="cameraZoom">Zoom da visualização <span id="cameraZoomValue">1.0×</span></label>
+            <label for="cameraZoom">Zoom da câmera transmitida <span id="cameraZoomValue">1.0×</span></label>
             <input id="cameraZoom" type="range" min="1" max="2.5" step="0.1" value="1">
+            <button id="mirrorCameraBtn" class="primary">Espelhar câmera: ligado</button>
             <p class="tool-title">EFEITOS DE CÂMERA</p>
             <label for="filterSelect">Fundo</label>
             <select id="filterSelect">
@@ -101,6 +102,6 @@
   </main>
   <div id="toast" class="toast" role="status"></div>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=20261121-camera-effects2"></script>
+  <script src="/app.js?v=20261121-camera-effects3"></script>
 </body>
 </html>
