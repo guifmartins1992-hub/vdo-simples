@@ -77,7 +77,13 @@ io.on("connection", socket => {
     socket.to(normalized).emit("room:members", { members: publicMembers(room) });
   });
 
-  socket.on("peer:refresh", () => {});\n\n  socket.on("peer:refresh-request", () => {});\n\n  socket.on("peer:refresh", () => {\n    const code = socket.data.roomCode;\n    const room = code && rooms.get(code);\n    if (room && room.members.has(socket.id)) socket.to(code).emit("peer:refresh", { from: socket.id });\n  });\n\n  socket.on("signal", ({ to, description, candidate } = {}) => {
+  socket.on("peer:refresh", () => {
+    const code = socket.data.roomCode;
+    const room = code && rooms.get(code);
+    if (room && room.members.has(socket.id)) socket.to(code).emit("peer:refresh", { from: socket.id });
+  });
+
+  socket.on("signal", ({ to, description, candidate } = {}) => {
     const code = socket.data.roomCode;
     const room = code && rooms.get(code);
     if (!room || !room.members.has(socket.id) || !room.members.has(to)) return;
