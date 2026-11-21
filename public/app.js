@@ -78,7 +78,7 @@ function makePeer(peerId,offerer=false){
     if(e.track.kind==="audio"){
       const audio=$("remoteScreenAudio");audio.srcObject=e.streams?.[0]||new MediaStream([e.track]);
       audio.volume=Number($("screenAudioVolume").value)/100;audio.muted=$("screenAudioMute").dataset.muted==="true";
-      audio.play().catch(()=>toast("Clique em Ativar áudio para ouvir."));$("screenAudioPanel").classList.remove("hidden");
+      audio.play().catch(()=>{audio.muted=true;$("screenAudioMute").dataset.muted="true";$("screenAudioMute").textContent="Ativar áudio";toast("Clique em Ativar áudio para liberar o som.");});$("screenAudioPanel").classList.remove("hidden");
       $("screenAudioStatus").textContent="Áudio da transmissão recebido";
       e.track.onended=()=>{audio.srcObject=null;$("screenAudioPanel").classList.add("hidden");};return;
     }
@@ -423,7 +423,7 @@ $("joinBtn").addEventListener("click",()=>{
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
 $("screenAudioVolume").addEventListener("input",e=>{$("remoteScreenAudio").volume=Number(e.target.value)/100;$("screenAudioVolumeValue").textContent=e.target.value+"%";});
-$("screenAudioMute").addEventListener("click",()=>{const muted=$("screenAudioMute").dataset.muted!=="true";$("screenAudioMute").dataset.muted=String(muted);$("remoteScreenAudio").muted=muted;$("screenAudioMute").textContent=muted?"Ativar áudio":"Silenciar";});
+$("screenAudioMute").addEventListener("click",()=>{const muted=$("screenAudioMute").dataset.muted!=="true";$("screenAudioMute").dataset.muted=String(muted);$("remoteScreenAudio").muted=muted;$("screenAudioMute").textContent=muted?"Ativar áudio":"Silenciar";if(!muted)$("remoteScreenAudio").play().catch(()=>{});});
 $("reloadScreenBtn").addEventListener("click",reloadReceivedScreen);$("reloadCamerasBtn").addEventListener("click",reloadReceivedMedia);
 $("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
 $("filterSelect").addEventListener("change",e=>{
