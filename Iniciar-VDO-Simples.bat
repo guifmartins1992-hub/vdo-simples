@@ -10,22 +10,28 @@ echo.
 
 set "APP_DIR=%~dp0"
 
-REM Se o launcher estiver sozinho, baixa a versao mais recente do GitHub.
+REM Se nao estiver junto dos arquivos do projeto, baixa uma copia local.
 if not exist "%APP_DIR%server.js" (
-    set "APP_DIR=%LOCALAPPDATA%\VdoSimples"
     echo [1/4] Baixando o VDO Simples do GitHub...
+    set "APP_DIR=%LOCALAPPDATA%\VdoSimples"
     if not exist "%LOCALAPPDATA%\VdoSimples" mkdir "%LOCALAPPDATA%\VdoSimples"
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-main.zip'; Invoke-WebRequest 'https://github.com/guifmartins1992-hub/vdo-simples/archive/refs/heads/main.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $env:TEMP -Force; $src=Join-Path $env:TEMP 'vdo-simples-main'; $dest=Join-Path $env:LOCALAPPDATA 'VdoSimples'; Copy-Item (Join-Path $src '*') $dest -Recurse -Force; Remove-Item $zip -Force"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-main.zip'; $extract=Join-Path $env:TEMP 'vdo-simples-download'; if(Test-Path $extract){Remove-Item $extract -Recurse -Force}; Invoke-WebRequest 'https://github.com/guifmartins1992-hub/vdo-simples/archive/refs/heads/main.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; $src=Join-Path $extract 'vdo-simples-main'; $dest=Join-Path $env:LOCALAPPDATA 'VdoSimples'; New-Item -ItemType Directory -Force -Path $dest | Out-Null; Get-ChildItem -LiteralPath $src -Force | Copy-Item -Destination $dest -Recurse -Force; Remove-Item $zip -Force; if(!(Test-Path (Join-Path $dest 'server.js'))){throw 'server.js nao foi copiado'}"
     if errorlevel 1 (
         echo.
-        echo ERRO: Nao foi possivel baixar o projeto.
+        echo ERRO: Nao foi possivel baixar ou preparar os arquivos.
+        echo Verifique sua conexao e tente novamente.
         pause
         exit /b 1
     )
+    set "APP_DIR=%LOCALAPPDATA%\VdoSimples"
 )
 
 if not exist "%APP_DIR%server.js" (
-    echo ERRO: server.js nao foi encontrado.
+    echo.
+    echo ERRO: server.js nao foi encontrado em:
+    echo "%APP_DIR%"
+    echo.
+    echo Tente apagar a pasta %%LOCALAPPDATA%%\VdoSimples e executar novamente.
     pause
     exit /b 1
 )
@@ -34,19 +40,19 @@ where node >nul 2>nul
 if errorlevel 1 (
     echo Node.js nao encontrado. Instale a versao 20 ou superior:
     echo https://nodejs.org/
-    echo Depois execute este launcher novamente.
     pause
     exit /b 1
 )
 where npm >nul 2>nul
 if errorlevel 1 (
-    echo npm nao encontrado. Reinstale o Node.js: https://nodejs.org/
+    echo npm nao encontrado. Reinstale o Node.js:
+    echo https://nodejs.org/
     pause
     exit /b 1
 )
 
 if not exist "%APP_DIR%node_modules\express" (
-    echo [2/4] Preparando dependencias. Aguarde...
+    echo [2/4] Instalando dependencias. Aguarde...
     pushd "%APP_DIR%"
     call npm install
     if errorlevel 1 (
@@ -65,8 +71,7 @@ if errorlevel 1 (
     echo [3/4] Cloudflared nao encontrado. Tentando instalar pelo winget...
     where winget >nul 2>nul
     if errorlevel 1 (
-        echo.
-        echo Instale o Cloudflare Tunnel por:
+        echo Instale o Cloudflare Tunnel:
         echo https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
         pause
         exit /b 1
@@ -76,8 +81,7 @@ if errorlevel 1 (
     where cloudflared >nul 2>nul
     if errorlevel 1 (
         echo.
-        echo O Cloudflared foi instalado ou atualizado, mas nao foi localizado nesta janela.
-        echo Feche e abra o launcher novamente.
+        echo Feche esta janela e execute o launcher novamente para atualizar o PATH.
         pause
         exit /b 1
     )
@@ -95,6 +99,6 @@ echo Pronto! Mantenha as duas janelas abertas durante a sessao.
 echo O link publico aparecera na janela 'VDO Simples - Link publico'.
 echo Envie esse link aos seus amigos.
 echo.
-echo Para encerrar: feche as duas janelas do VDO Simples.
+echo Para encerrar, feche as duas janelas do VDO Simples.
 echo.
 pause
