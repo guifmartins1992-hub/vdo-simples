@@ -77,12 +77,11 @@ io.on("connection", socket => {
     socket.to(normalized).emit("room:members", { members: publicMembers(room) });
   });
 
-  socket.on("peer:reset", (_payload, ack = () => {}) => {
+  socket.on("camera:refresh", () => {
     const code = socket.data.roomCode;
     const room = code && rooms.get(code);
-    if (!room || !room.members.has(socket.id)) return ack({ ok: false });
-    socket.to(code).emit("peer:reset", { from: socket.id });
-    ack({ ok: true });
+    if (!room || !room.members.has(socket.id)) return;
+    socket.to(code).emit("camera:refresh", { from: socket.id });
   });
 
   socket.on("signal", ({ to, description, candidate } = {}) => {
