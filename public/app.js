@@ -79,7 +79,7 @@ function makePeer(peerId,offerer=false){
       const audio=$("remoteScreenAudio");audio.srcObject=e.streams?.[0]||new MediaStream([e.track]);
       audio.volume=Number($("screenAudioVolume").value)/100;audio.muted=$("screenAudioMute").dataset.muted==="true";
       audio.play().catch(()=>{audio.muted=true;$("screenAudioMute").dataset.muted="true";$("screenAudioMute").textContent="♪";$("screenAudioMute").title="Ativar áudio";toast("Clique no controle de áudio para liberar o som.");});
-      $("screenAudioPanel").classList.toggle("hidden",state.screenOwner===state.selfId||!state.screenOwner);
+      $("screenAudioPanel").classList.toggle("hidden",!state.screenOwner);
       e.track.onended=()=>{audio.srcObject=null;};return;
     }
     // Usa o MediaStream fornecido pelo WebRTC, preservando a associação original da faixa.
@@ -240,7 +240,7 @@ socket.on("screen:refresh",async({from})=>{
 });
 socket.on("room:members",({members})=>updateMembers(members));
 socket.on("screen:started",({peerId})=>{
-  state.screenOwner=peerId;$("screenAudioPanel").classList.toggle("hidden",peerId===state.selfId);const name=state.members.get(peerId)?.name||"Participante";
+  state.screenOwner=peerId;$("screenAudioPanel").classList.remove("hidden");const name=state.members.get(peerId)?.name||"Participante";
   $("screenStatus").textContent=peerId===state.selfId?"Você está transmitindo":name+" está transmitindo";$("screenStatus").classList.add("live");
   $("screenOwner").textContent="Transmitindo: "+name;$("screenOwner").classList.remove("hidden");if(peerId!==state.selfId)showRemoteScreen(peerId);
 });
