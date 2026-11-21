@@ -112,15 +112,12 @@ async function reloadReceivedMedia(){
   if(!state.roomCode)return;
   const peers=[...state.members.keys()].filter(id=>id!==state.selfId);
   if(!peers.length){toast("Não há outros participantes para reconectar.");return;}
-  setConnection("Reconectando mídias recebidas…");
-  socket.emit("peer:reset",{},async(result)=>{
+  setConnection("Solicitando recuperação das mídias…");
+  socket.emit("peer:reset",{},result=>{
     if(!result?.ok){toast("Não foi possível solicitar a reconexão.");return;}
     for(const id of peers)discardPeer(id);
-    try{
-      await Promise.all(peers.map(id=>initiatePeer(id)));
-      setConnection("Reconexão solicitada");
-      toast("Reconectando transmissão e câmeras dos outros participantes.");
-    }catch(err){console.error("Falha ao recuperar mídias recebidas",err);toast("Falha ao reconectar. Tente novamente.");}
+    setConnection("Aguardando reconexão dos participantes…");
+    toast("Solicitação enviada. Reconectando transmissão e câmeras.");
   });
 }
 
@@ -168,7 +165,11 @@ async function reloadMyCameras(){
   toast("Ligue sua câmera ou selecione um avatar para recarregar.");
 }
 socket.on("peer:left",({peerId})=>{discardPeer(peerId);if(state.screenOwner===peerId)resetScreenDisplay();renderCameras();});
-socket.on("peer:reset",({from})=>{discardPeer(from);renderCameras();});
+socket.on("peer:reset",async({from})=>{
+  discardPeer(from);renderCameras();
+  try{await initiatePeer(from);}
+  catch(err){console.error("Falha ao iniciar reconexão solicitada",err);}
+});
 socket.on("room:members",({members})=>updateMembers(members));
 socket.on("screen:started",({peerId})=>{
   state.screenOwner=peerId;const name=state.members.get(peerId)?.name||"Participante";
