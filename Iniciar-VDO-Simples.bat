@@ -2,40 +2,38 @@
 setlocal EnableExtensions
 title VDO Simples - Launcher
 
+set "APP_DIR=%LOCALAPPDATA%\VdoSimples"
+
 echo.
 echo  =====================================
 echo          VDO SIMPLES - INICIAR
 echo  =====================================
 echo.
 
-set "APP_DIR=%~dp0"
+REM Confere se a copia local esta completa. Se nao estiver, baixa novamente.
+if not exist "%APP_DIR%\server.js" goto DOWNLOAD
+if not exist "%APP_DIR%\package.json" goto DOWNLOAD
+if not exist "%APP_DIR%\public\index.html" goto DOWNLOAD
+goto CHECK_NODE
 
-REM Se nao estiver junto dos arquivos do projeto, baixa uma copia local.
-if not exist "%APP_DIR%server.js" (
-    echo [1/4] Baixando o VDO Simples do GitHub...
-    set "APP_DIR=%LOCALAPPDATA%\VdoSimples"
-    if not exist "%LOCALAPPDATA%\VdoSimples" mkdir "%LOCALAPPDATA%\VdoSimples"
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-main.zip'; $extract=Join-Path $env:TEMP 'vdo-simples-download'; if(Test-Path $extract){Remove-Item $extract -Recurse -Force}; Invoke-WebRequest 'https://github.com/guifmartins1992-hub/vdo-simples/archive/refs/heads/main.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; $src=Join-Path $extract 'vdo-simples-main'; $dest=Join-Path $env:LOCALAPPDATA 'VdoSimples'; New-Item -ItemType Directory -Force -Path $dest | Out-Null; Get-ChildItem -LiteralPath $src -Force | Copy-Item -Destination $dest -Recurse -Force; Remove-Item $zip -Force; if(!(Test-Path (Join-Path $dest 'server.js'))){throw 'server.js nao foi copiado'}"
-    if errorlevel 1 (
-        echo.
-        echo ERRO: Nao foi possivel baixar ou preparar os arquivos.
-        echo Verifique sua conexao e tente novamente.
-        pause
-        exit /b 1
-    )
-    set "APP_DIR=%LOCALAPPDATA%\VdoSimples"
-)
-
-if not exist "%APP_DIR%server.js" (
+:DOWNLOAD
+echo [1/4] Baixando os arquivos do VDO Simples...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $base=Join-Path $env:LOCALAPPDATA 'VdoSimples'; $zip=Join-Path $env:TEMP 'vdo-simples-main.zip'; $tmp=Join-Path $env:TEMP ('vdo-simples-'+[guid]::NewGuid().ToString()); if(Test-Path $base){Remove-Item $base -Recurse -Force}; New-Item -ItemType Directory -Force -Path $tmp | Out-Null; Invoke-WebRequest 'https://github.com/guifmartins1992-hub/vdo-simples/archive/refs/heads/main.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force; $server=Get-ChildItem -LiteralPath $tmp -Filter 'server.js' -File -Recurse | Select-Object -First 1; if($null -eq $server){throw 'O arquivo server.js nao apareceu no ZIP baixado'}; $source=$server.Directory.FullName; New-Item -ItemType Directory -Force -Path $base | Out-Null; Get-ChildItem -LiteralPath $source -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $base -Recurse -Force }; Remove-Item $zip -Force; Remove-Item $tmp -Recurse -Force; if(!(Test-Path (Join-Path $base 'server.js'))){throw 'Falha ao copiar server.js para a pasta local'}"
+if errorlevel 1 (
     echo.
-    echo ERRO: server.js nao foi encontrado em:
-    echo "%APP_DIR%"
-    echo.
-    echo Tente apagar a pasta %%LOCALAPPDATA%%\VdoSimples e executar novamente.
+    echo ERRO: Nao foi possivel baixar os arquivos do GitHub.
+    echo Confira sua internet e tente novamente.
     pause
     exit /b 1
 )
 
+if not exist "%APP_DIR%\server.js" (
+    echo ERRO: server.js ainda nao foi encontrado em "%APP_DIR%".
+    pause
+    exit /b 1
+)
+
+:CHECK_NODE
 where node >nul 2>nul
 if errorlevel 1 (
     echo Node.js nao encontrado. Instale a versao 20 ou superior:
@@ -51,8 +49,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "%APP_DIR%node_modules\express" (
-    echo [2/4] Instalando dependencias. Aguarde...
+if not exist "%APP_DIR%\node_modules\express" (
+    echo [2/4] Instalando dependencias...
     pushd "%APP_DIR%"
     call npm install
     if errorlevel 1 (
@@ -68,7 +66,7 @@ if not exist "%APP_DIR%node_modules\express" (
 
 where cloudflared >nul 2>nul
 if errorlevel 1 (
-    echo [3/4] Cloudflared nao encontrado. Tentando instalar pelo winget...
+    echo [3/4] Instalando Cloudflare Tunnel...
     where winget >nul 2>nul
     if errorlevel 1 (
         echo Instale o Cloudflare Tunnel:
@@ -80,8 +78,7 @@ if errorlevel 1 (
     set "PATH=%PATH%;%LOCALAPPDATA%\Microsoft\WinGet\Links"
     where cloudflared >nul 2>nul
     if errorlevel 1 (
-        echo.
-        echo Feche esta janela e execute o launcher novamente para atualizar o PATH.
+        echo Feche e abra o launcher novamente para reconhecer o Cloudflare Tunnel.
         pause
         exit /b 1
     )
@@ -95,10 +92,7 @@ timeout /t 3 /nobreak >nul
 start "VDO Simples - Link publico" cmd /k "cloudflared tunnel --url http://localhost:3000"
 
 echo.
-echo Pronto! Mantenha as duas janelas abertas durante a sessao.
-echo O link publico aparecera na janela 'VDO Simples - Link publico'.
-echo Envie esse link aos seus amigos.
-echo.
-echo Para encerrar, feche as duas janelas do VDO Simples.
+echo Mantenha as duas janelas abertas durante a sessao.
+echo O link publico aparecera na janela do Cloudflare Tunnel.
 echo.
 pause
