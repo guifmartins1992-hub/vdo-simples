@@ -14,8 +14,8 @@ REM Se o launcher estiver sozinho, baixa a versao mais recente do GitHub.
 if not exist "%APP_DIR%server.js" (
     set "APP_DIR=%LOCALAPPDATA%\VdoSimples"
     echo [1/4] Baixando o VDO Simples do GitHub...
-    if not exist "%APP_DIR%" mkdir "%APP_DIR%"
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-main.zip'; Invoke-WebRequest 'https://github.com/guifmartins1992-hub/vdo-simples/archive/refs/heads/main.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $env:TEMP -Force; $src=Join-Path $env:TEMP 'vdo-simples-main'; Copy-Item (Join-Path $src '*') '%APP_DIR%' -Recurse -Force; Remove-Item $zip -Force"
+    if not exist "%LOCALAPPDATA%\VdoSimples" mkdir "%LOCALAPPDATA%\VdoSimples"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-main.zip'; Invoke-WebRequest 'https://github.com/guifmartins1992-hub/vdo-simples/archive/refs/heads/main.zip' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $env:TEMP -Force; $src=Join-Path $env:TEMP 'vdo-simples-main'; $dest=Join-Path $env:LOCALAPPDATA 'VdoSimples'; Copy-Item (Join-Path $src '*') $dest -Recurse -Force; Remove-Item $zip -Force"
     if errorlevel 1 (
         echo.
         echo ERRO: Nao foi possivel baixar o projeto.
@@ -30,7 +30,6 @@ if not exist "%APP_DIR%server.js" (
     exit /b 1
 )
 
-REM Verifica Node.js e npm.
 where node >nul 2>nul
 if errorlevel 1 (
     echo Node.js nao encontrado. Instale a versao 20 ou superior:
@@ -46,7 +45,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Instala as dependencias na primeira execucao.
 if not exist "%APP_DIR%node_modules\express" (
     echo [2/4] Preparando dependencias. Aguarde...
     pushd "%APP_DIR%"
@@ -62,7 +60,6 @@ if not exist "%APP_DIR%node_modules\express" (
     echo [2/4] Dependencias ja instaladas.
 )
 
-REM Instala o Cloudflare Tunnel se necessario e se o winget estiver disponivel.
 where cloudflared >nul 2>nul
 if errorlevel 1 (
     echo [3/4] Cloudflared nao encontrado. Tentando instalar pelo winget...
