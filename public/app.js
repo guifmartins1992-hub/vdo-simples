@@ -64,14 +64,23 @@ function makePeer(peerId,offerer=false){
   if(offerer){pc.addTransceiver("video",{direction:"sendrecv"});pc.addTransceiver("video",{direction:"sendrecv"});}
   pc.onicecandidate=e=>{if(e.candidate)socket.emit("signal",{to:peerId,candidate:e.candidate})};
   pc.ontrack=e=>{
-    const stream=e.streams?.[0]||new MediaStream([e.track]);
-    const isScreen=e.transceiver.mid==="0";
-    if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId);}
-    else{state.remoteCameras.set(peerId,stream);renderCameras();}
-    e.track.onunmute=()=>{
-      if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId);}
-      else{state.remoteCameras.set(peerId,stream);renderCameras();}
+    // Classifica pela transceiver negociada, não apenas pelo mid, que pode ainda não estar definido.
+    const isScreen=e.transceiver===state.screenTransceivers.get(peerId)||e.transceiver.mid==="0";
+    const collection=isScreen?state.remoteScreens:state.remoteCameras;
+    let stream=collection.get(peerId);
+    if(!stream){stream=new MediaStream();collection.set(peerId,stream);}
+    if(!stream.getTracks().some(track=>track.id===e.track.id))stream.addTrack(e.track);
+    const update=()=>{
+      if(isScreen){if(state.screenOwner===peerId)showRemoteScreen(peerId);}
+      else renderCameras();
     };
+    e.track.onunmute=update;
+    e.track.onended=()=>{
+      stream.removeTrack(e.track);
+      if(isScreen){if(state.screenOwner===peerId)showRemoteScreen(peerId);}
+      else renderCameras();
+    };
+    update();
   };
   pc.oniceconnectionstatechange=()=>{console.info("WebRTC ICE",peerId,pc.iceConnectionState);if(pc.iceConnectionState==="failed")pc.restartIce();};
   pc.onconnectionstatechange=()=>console.info("WebRTC conexão",peerId,pc.connectionState);
@@ -113,7 +122,8 @@ async function refreshCameraToPeer(peerId){
   const track=state.outgoingCamera?.getVideoTracks()[0]||null;
   if(!tx||!track||track.readyState!=="live")return;
   try{
-    await tx.sender.replaceTrack(null);
+    // Reanexa somente a faixa de câmera. Não fecha nem renegocia a conexão
+    // e não toca na transceiver dedicada à transmissão de tela.
     await tx.sender.replaceTrack(track);
   }catch(err){console.warn("Falha ao reativar envio da câmera",peerId,err);}
 }
