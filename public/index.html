@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171b27">
+  <title>VDO Simples</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="home" class="home-screen">
+      <div class="brand-mark">▣</div>
+      <p class="eyebrow">SALAS PRIVADAS • TEMPO REAL</p>
+      <h1>VDO <span>SIMPLES</span></h1>
+      <p class="intro">Compartilhe sua tela. Veja quem está com você.</p>
+      <div class="home-actions">
+        <button id="createBtn" class="primary">＋ Criar sala</button>
+        <div class="join-box">
+          <input id="roomCode" maxlength="6" autocomplete="off" placeholder="Código da sala" aria-label="Código da sala">
+          <button id="joinBtn" class="secondary">Acessar sala</button>
+        </div>
+      </div>
+      <p id="homeError" class="error" role="alert"></p>
+      <p class="footnote">Sem cadastro • Sem limite artificial de duração</p>
+    </section>
+
+    <section id="room" class="room-screen hidden">
+      <header class="room-header">
+        <div class="mini-brand"><span>▣</span> VDO SIMPLES</div>
+        <div class="room-meta"><span id="roomCodeLabel"></span><button id="copyCodeBtn" class="text-button">Copiar código</button></div>
+        <button id="leaveBtn" class="danger-outline">Sair da sala</button>
+      </header>
+
+      <nav class="tabs" aria-label="Abas da sala">
+        <button class="tab active" data-tab="screenPanel">▣ <span>Transmissão</span></button>
+        <button class="tab" data-tab="cameraPanel">◉ <span>Câmeras</span><b id="memberCount" class="count">1</b></button>
+      </nav>
+
+      <section id="screenPanel" class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">COMPARTILHAMENTO</p><h2>Transmissão de tela</h2></div>
+          <span id="screenStatus" class="status">Ninguém transmitindo</span>
+        </div>
+        <div class="screen-stage">
+          <div id="screenPlaceholder" class="placeholder">
+            <div class="placeholder-icon">▣</div>
+            <h3>A tela compartilhada aparecerá aqui</h3>
+            <p>Qualquer participante pode iniciar uma transmissão. Apenas uma por vez.</p>
+          </div>
+          <video id="remoteScreen" autoplay playsinline class="hidden"></video>
+          <video id="localScreenPreview" autoplay muted playsinline class="hidden"></video>
+          <div id="screenOwner" class="screen-owner hidden"></div>
+        </div>
+        <div class="controls">
+          <button id="shareBtn" class="primary">▣ Compartilhar minha tela</button>
+          <button id="stopShareBtn" class="secondary hidden">Parar transmissão</button>
+        </div>
+        <p class="hint">A transmissão envia somente a imagem, sem áudio do computador.</p>
+      </section>
+
+      <section id="cameraPanel" class="panel hidden">
+        <div class="panel-heading">
+          <div><p class="eyebrow">PARTICIPANTES</p><h2>Câmeras</h2></div>
+          <span id="cameraStatus" class="status">Câmera desligada</span>
+        </div>
+        <div id="videoGrid" class="video-grid"></div>
+        <div class="controls">
+          <button id="cameraBtn" class="primary">◉ Ligar minha câmera</button>
+          <button id="cameraOffBtn" class="secondary hidden">Desligar câmera</button>
+        </div>
+        <p class="hint">As câmeras transmitem somente vídeo. Microfones e áudio estão desativados.</p>
+      </section>
+
+      <footer class="room-footer">
+        <span id="connectionState">Conectando…</span>
+        <span id="hostLabel"></span>
+        <button id="endRoomBtn" class="text-button hidden">Encerrar sala para todos</button>
+      </footer>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
