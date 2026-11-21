@@ -33,7 +33,7 @@ if not exist "%APP_DIR%\server.js" (
   if exist "%APP_DIR%" rmdir /s /q "%APP_DIR%"
   mkdir "%APP_DIR%" 2>nul
   powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-testes.zip'; Invoke-WebRequest -Uri '%REPO_ZIP%' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $env:TEMP -Force; $src=Join-Path $env:TEMP 'vdo-simples-testes'; if(Test-Path $src){Remove-Item $src -Recurse -Force}; $folder=Get-ChildItem (Join-Path $env:TEMP 'vdo-simples-*') -Directory | Where-Object {$_.Name -like 'vdo-simples-*'} | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if(-not $folder){throw 'Pasta extraida nao encontrada'}; Copy-Item (Join-Path $folder.FullName '*') '%APP_DIR%' -Recurse -Force; Remove-Item $zip -Force"
+    "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-testes.zip'; $extract=Join-Path $env:TEMP ('vdo-testes-'+[guid]::NewGuid().ToString()); Invoke-WebRequest -Uri '%REPO_ZIP%' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; $folder=Get-ChildItem $extract -Directory | Select-Object -First 1; if(-not $folder){throw 'Pasta extraida nao encontrada'}; Copy-Item (Join-Path $folder.FullName '*') '%APP_DIR%' -Recurse -Force; Remove-Item $zip -Force; Remove-Item $extract -Recurse -Force"
   if errorlevel 1 (
     echo.
     echo ERRO ao baixar a branch TESTES.
