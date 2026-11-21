@@ -99,20 +99,48 @@ socket.on("signal",async({from,description,candidate})=>{
     }
   }catch(err){console.error("Falha na negociação WebRTC",err);}
 });
-function discardPeer(peerId){
-  state.pcs.get(peerId)?.close();state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);state.pendingCandidates.delete(peerId);
-  state.remoteCameras.delete(peerId);state.remoteScreens.delete(peerId);
-  const tile=state.cameraTiles.get(peerId);if(tile){tile.tile.remove();state.cameraTiles.delete(peerId);}
-  renderCameras();
+async function reloadMyScreen(){
+  if(!state.localScreen){toast("Apenas quem está transmitindo pode recarregar a própria transmissão.");return;}
+  try{
+    const fresh=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:false});
+    const track=fresh.getVideoTracks()[0];
+    if(!track){stopStream(fresh);toast("Não foi possível obter a nova captura.");return;}
+    const previous=state.localScreen;
+    for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
+    state.localScreen=fresh;
+    $("localScreenPreview").srcObject=fresh;
+    track.onended=stopScreen;
+    stopStream(previous);
+    toast("Transmissão recarregada.");
+  }catch(err){
+    if(err.name!=="NotAllowedError")toast("Não foi possível recarregar a transmissão.");
+  }
 }
-socket.on("peer:refresh",({from})=>{discardPeer(from);toast("Reconectando mídia do participante...");});
-async function refreshMedia(kind){
-  const peers=[...state.members.keys()].filter(id=>id!==state.selfId);
-  if(!peers.length){toast("Não há outros participantes para reconectar.");return;}
-  socket.emit("peer:refresh");
-  for(const id of peers)discardPeer(id);
-  try{await Promise.all(peers.map(id=>initiatePeer(id)));toast(kind==="screen"?"Reconectando transmissão...":"Reconectando câmeras...");}
-  catch(err){console.error("Falha ao recarregar mídia",err);toast("Não foi possível reconectar. Tente novamente.");}
+async function reloadMyCameras(){
+  if(state.cameraMode==="camera"&&state.localCamera){
+    try{
+      const fresh=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640,max:1280},height:{ideal:360,max:720},frameRate:{ideal:24,max:30}},audio:false});
+      const previous=state.localCamera;
+      state.localCamera=fresh;
+      if(state.filterActive)await applyCameraFilter();
+      else await replaceOutgoingCamera(fresh);
+      stopStream(previous);
+      toast("Câmera recarregada.");
+    }catch(err){console.error(err);toast("Não foi possível recarregar sua câmera.");}
+    return;
+  }
+  if(state.cameraMode==="avatar"&&state.avatarImage){
+    const canvas=state.avatarCanvas;
+    if(canvas){
+      const ctx=canvas.getContext("2d"),img=state.avatarImage;
+      ctx.fillStyle="#101a13";ctx.fillRect(0,0,640,360);
+      const scale=Math.min(560/img.width,300/img.height),w=img.width*scale,h=img.height*scale;
+      ctx.drawImage(img,(640-w)/2,(360-h)/2,w,h);
+      toast("Avatar atualizado.");
+    }
+    return;
+  }
+  toast("Ligue sua câmera ou selecione um avatar para recarregar.");
 }
 socket.on("peer:left",({peerId})=>{discardPeer(peerId);if(state.screenOwner===peerId)resetScreenDisplay();});
 socket.on("room:members",({members})=>updateMembers(members));
@@ -274,7 +302,7 @@ $("joinBtn").addEventListener("click",()=>{
 });
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
-$("reloadScreenBtn").addEventListener("click",()=>refreshMedia("screen"));$("reloadCamerasBtn").addEventListener("click",()=>refreshMedia("cameras"));
+$("reloadScreenBtn").addEventListener("click",reloadMyScreen);$("reloadCamerasBtn").addEventListener("click",reloadMyCameras);
 $("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
 $("filterSelect").addEventListener("change",e=>{
   state.filterMode=e.target.value;$("filterToggleBtn").disabled=state.filterMode==="none"||(state.filterMode==="image"&&!state.backgroundImage);
