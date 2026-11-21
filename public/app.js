@@ -64,21 +64,31 @@ function makePeer(peerId,offerer=false){
   if(offerer){pc.addTransceiver("video",{direction:"sendrecv"});pc.addTransceiver("video",{direction:"sendrecv"});}
   pc.onicecandidate=e=>{if(e.candidate)socket.emit("signal",{to:peerId,candidate:e.candidate})};
   pc.ontrack=e=>{
-    // Classifica pela transceiver negociada, não apenas pelo mid, que pode ainda não estar definido.
-    const isScreen=e.transceiver===state.screenTransceivers.get(peerId)||e.transceiver.mid==="0";
+    // Usa o MediaStream fornecido pelo WebRTC, preservando a associação original da faixa.
+    const stream=e.streams?.[0]||new MediaStream([e.track]);
+    const isScreen=e.transceiver.mid==="0";
     const collection=isScreen?state.remoteScreens:state.remoteCameras;
-    let stream=collection.get(peerId);
-    if(!stream){stream=new MediaStream();collection.set(peerId,stream);}
-    if(!stream.getTracks().some(track=>track.id===e.track.id))stream.addTrack(e.track);
     const update=()=>{
-      if(isScreen){if(state.screenOwner===peerId)showRemoteScreen(peerId);}
-      else renderCameras();
+      if(isScreen){
+        if(e.track.muted){collection.delete(peerId);}
+        else{collection.set(peerId,stream);}
+        if(state.screenOwner===peerId){
+          if(collection.has(peerId))showRemoteScreen(peerId);
+          else{$("remoteScreen").srcObject=null;$("remoteScreen").classList.add("hidden");}
+        }
+      }else{
+        if(e.track.muted)collection.delete(peerId);
+        else collection.set(peerId,stream);
+        renderCameras();
+      }
     };
+    e.track.onmute=update;
     e.track.onunmute=update;
     e.track.onended=()=>{
-      stream.removeTrack(e.track);
-      if(isScreen){if(state.screenOwner===peerId)showRemoteScreen(peerId);}
-      else renderCameras();
+      collection.delete(peerId);
+      if(isScreen){
+        if(state.screenOwner===peerId){$("remoteScreen").srcObject=null;$("remoteScreen").classList.add("hidden");}
+      }else renderCameras();
     };
     update();
   };
