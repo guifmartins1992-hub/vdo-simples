@@ -114,10 +114,7 @@ async function refreshMedia(kind){
   try{await Promise.all(peers.map(id=>initiatePeer(id)));toast(kind==="screen"?"Reconectando transmissão...":"Reconectando câmeras...");}
   catch(err){console.error("Falha ao recarregar mídia",err);toast("Não foi possível reconectar. Tente novamente.");}
 }
-socket.on("peer:left",({peerId})=>{
-  state.pcs.get(peerId)?.close();state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);state.pendingCandidates.delete(peerId);
-  state.remoteCameras.delete(peerId);state.remoteScreens.delete(peerId);if(state.screenOwner===peerId)resetScreenDisplay();renderCameras();
-});
+socket.on("peer:left",({peerId})=>{discardPeer(peerId);if(state.screenOwner===peerId)resetScreenDisplay();});
 socket.on("room:members",({members})=>updateMembers(members));
 socket.on("screen:started",({peerId})=>{
   state.screenOwner=peerId;const name=state.members.get(peerId)?.name||"Participante";
@@ -139,7 +136,18 @@ function resetScreenDisplay(){
 }
 async function replaceOutgoingCamera(stream){
   state.outgoingCamera=stream;const track=stream?.getVideoTracks()[0]||null;
-  for(const tx of state.cameraTransceivers.values())await tx.sender.replaceTrack(track).catch(()=>{});
+  if(track)track.contentHint="motion";
+  for(const tx of state.cameraTransceivers.values()){
+    try{
+      await tx.sender.replaceTrack(track);
+      const params=tx.sender.getParameters();
+      if(params.encodings?.length){
+        params.encodings[0].maxBitrate=650000;
+        params.encodings[0].maxFramerate=24;
+        await tx.sender.setParameters(params);
+      }
+    }catch(err){console.warn("Não foi possível ajustar envio da câmera",err);}
+  }
   renderCameras();
 }
 function stopStream(stream){stream?.getTracks().forEach(t=>t.stop())}
