@@ -265,7 +265,8 @@ $("joinBtn").addEventListener("click",()=>{
   socket.emit("room:join",{code,name:"Participante"},result=>{if(!result?.ok)return showHomeError(result?.error||"Não foi possível entrar.");enterRoom(result)});
 });
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
-$("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);\n$("reloadScreenBtn").addEventListener("click",()=>refreshMedia("screen"));$("reloadCamerasBtn").addEventListener("click",()=>refreshMedia("cameras"));
+$("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
+$("reloadScreenBtn").addEventListener("click",()=>refreshMedia("screen"));$("reloadCamerasBtn").addEventListener("click",()=>refreshMedia("cameras"));
 $("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
 $("filterSelect").addEventListener("change",e=>{
   state.filterMode=e.target.value;$("filterToggleBtn").disabled=state.filterMode==="none"||(state.filterMode==="image"&&!state.backgroundImage);
