@@ -1,7 +1,7 @@
 const socket = io();
 const $ = id => document.getElementById(id);
 const state = {
-  cameraZoom:1,roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
+  cameraZoom:1,cameraTiles:new Map(),roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
   localCamera:null,outgoingCamera:null,localScreen:null,screenOwner:null,remoteScreens:new Map(),
   remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),pendingCandidates:new Map(),
   activeTab:"screenPanel",cameraMode:null,avatarImage:null,backgroundImage:null,
@@ -18,252 +18,27 @@ function updateMembers(members){
   $("hostLabel").textContent=state.isHost?"Você é o anfitrião":"Sala hospedada por "+(members.find(m=>m.isHost)?.name||"Anfitrião");renderCameras();
 }
 function renderCameras(){
-  const grid=$("videoGrid");grid.innerHTML="";
+  const grid=$("videoGrid");
+  const activeIds=new Set(state.members.keys());
+  for(const [id,tileData] of state.cameraTiles){
+    if(!activeIds.has(id)){tileData.tile.remove();state.cameraTiles.delete(id);}
+  }
   for(const member of state.members.values()){
-    const tile=document.createElement("div");tile.className="video-tile";
-    const video=document.createElement("video");video.autoplay=true;video.playsInline=true;video.muted=member.id===state.selfId;
+    let data=state.cameraTiles.get(member.id);
+    if(!data){
+      const tile=document.createElement("div");tile.className="video-tile";
+      const video=document.createElement("video");video.autoplay=true;video.playsInline=true;video.muted=member.id===state.selfId;
+      const empty=document.createElement("div");empty.className="no-camera";empty.textContent="Vídeo desligado";
+      const name=document.createElement("div");name.className="name";
+      tile.append(video,empty,name);grid.appendChild(tile);data={tile,video,empty,name,stream:null};state.cameraTiles.set(member.id,data);
+    }
+    data.name.textContent=(member.name||"Participante")+(member.id===state.selfId?" (você)":"");
     const stream=member.id===state.selfId?state.outgoingCamera:state.remoteCameras.get(member.id);
-    if(stream){video.srcObject=stream;video.style.transform=(member.id===state.selfId?"scaleX(-1) ":"")+"scale("+state.cameraZoom+")";}
-    else{const empty=document.createElement("div");empty.className="no-camera";empty.textContent="Vídeo desligado";tile.appendChild(empty)}
-    tile.appendChild(video);
-    const name=document.createElement("div");name.className="name";name.textContent=(member.name||"Participante")+(member.id===state.selfId?" (você)":"");tile.appendChild(name);grid.appendChild(tile);
+    if(stream&&data.video.srcObject!==stream){data.video.srcObject=stream;data.video.play().catch(()=>{});}
+    if(!stream&&data.video.srcObject){data.video.srcObject=null;}
+    data.empty.classList.toggle("hidden",!!stream);data.video.classList.toggle("hidden",!stream);
+    data.video.style.transform=(member.id===state.selfId?"scaleX(-1) ":"")+"scale("+state.cameraZoom+")";
   }
   $("cameraStatus").textContent=state.cameraMode==="avatar"?"Avatar ativo":state.cameraEnabled?"Sua câmera está ligada":"Vídeo desligado";
 }
-function mapPeerTransceivers(peerId,pc){
-  const transceivers=pc.getTransceivers().slice().sort((a,b)=>{
-    const am=a.mid===null?999:Number(a.mid),bm=b.mid===null?999:Number(b.mid);
-    return am-bm;
-  });
-  if(transceivers[0])state.screenTransceivers.set(peerId,transceivers[0]);
-  if(transceivers[1])state.cameraTransceivers.set(peerId,transceivers[1]);
-}
-async function syncLocalTracks(peerId){
-  const screenTx=state.screenTransceivers.get(peerId),cameraTx=state.cameraTransceivers.get(peerId);
-  if(screenTx)await screenTx.sender.replaceTrack(state.localScreen?.getVideoTracks()[0]||null);
-  if(cameraTx)await cameraTx.sender.replaceTrack(state.outgoingCamera?.getVideoTracks()[0]||null);
-}
-async function flushIceCandidates(peerId,pc){
-  const queued=state.pendingCandidates.get(peerId)||[];
-  state.pendingCandidates.set(peerId,[]);
-  for(const candidate of queued){try{await pc.addIceCandidate(candidate)}catch(err){console.warn("Candidato ICE não aplicado",err)}}
-}
-function makePeer(peerId,offerer=false){
-  if(state.pcs.has(peerId))return state.pcs.get(peerId);
-  const pc=new RTCPeerConnection(rtcConfig);
-  if(offerer){pc.addTransceiver("video",{direction:"sendrecv"});pc.addTransceiver("video",{direction:"sendrecv"});}
-  pc.onicecandidate=e=>{if(e.candidate)socket.emit("signal",{to:peerId,candidate:e.candidate})};
-  pc.ontrack=e=>{
-    const stream=e.streams?.[0]||new MediaStream([e.track]);
-    const isScreen=e.transceiver.mid==="0";
-    if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId);}
-    else{state.remoteCameras.set(peerId,stream);renderCameras();}
-    e.track.onunmute=()=>{
-      if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId);}
-      else{state.remoteCameras.set(peerId,stream);renderCameras();}
-    };
-  };
-  pc.oniceconnectionstatechange=()=>{console.info("WebRTC ICE",peerId,pc.iceConnectionState);if(pc.iceConnectionState==="failed")pc.restartIce();};
-  pc.onconnectionstatechange=()=>console.info("WebRTC conexão",peerId,pc.connectionState);
-  state.pcs.set(peerId,pc);if(offerer)mapPeerTransceivers(peerId,pc);return pc;
-}
-async function initiatePeer(peerId){
-  const pc=makePeer(peerId,true);await syncLocalTracks(peerId);
-  const offer=await pc.createOffer();await pc.setLocalDescription(offer);
-  socket.emit("signal",{to:peerId,description:pc.localDescription});
-}
-socket.on("signal",async({from,description,candidate})=>{
-  try{
-    const pc=makePeer(from,false);
-    if(description){
-      await pc.setRemoteDescription(description);
-      if(description.type==="offer"){
-        mapPeerTransceivers(from,pc);await syncLocalTracks(from);
-        const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
-        socket.emit("signal",{to:from,description:pc.localDescription});
-      }
-      await flushIceCandidates(from,pc);
-    }else if(candidate){
-      if(pc.remoteDescription?.type)await pc.addIceCandidate(candidate);
-      else{const queue=state.pendingCandidates.get(from)||[];queue.push(candidate);state.pendingCandidates.set(from,queue);}
-    }
-  }catch(err){console.error("Falha na negociação WebRTC",err);}
-});
-socket.on("peer:left",({peerId})=>{
-  state.pcs.get(peerId)?.close();state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);state.pendingCandidates.delete(peerId);
-  state.remoteCameras.delete(peerId);state.remoteScreens.delete(peerId);if(state.screenOwner===peerId)resetScreenDisplay();renderCameras();
-});
-socket.on("room:members",({members})=>updateMembers(members));
-socket.on("screen:started",({peerId})=>{
-  state.screenOwner=peerId;const name=state.members.get(peerId)?.name||"Participante";
-  $("screenStatus").textContent=peerId===state.selfId?"Você está transmitindo":name+" está transmitindo";$("screenStatus").classList.add("live");
-  $("screenOwner").textContent="Transmitindo: "+name;$("screenOwner").classList.remove("hidden");if(peerId!==state.selfId)showRemoteScreen(peerId);
-});
-socket.on("screen:stopped",({peerId})=>{if(state.screenOwner===peerId)resetScreenDisplay()});
-socket.on("room:closed",()=>{cleanupLocal();alert("O anfitrião encerrou a sala.");location.reload()});
 
-function showRemoteScreen(peerId){
-  const stream=state.remoteScreens.get(peerId);if(!stream)return;
-  $("remoteScreen").srcObject=stream;$("remoteScreen").classList.remove("hidden");$("screenPlaceholder").classList.add("hidden");$("localScreenPreview").classList.add("hidden");
-}
-function resetScreenDisplay(){
-  state.screenOwner=null;$("remoteScreen").srcObject=null;$("remoteScreen").classList.add("hidden");
-  $("localScreenPreview").srcObject=null;$("localScreenPreview").classList.add("hidden");$("screenPlaceholder").classList.remove("hidden");
-  $("screenOwner").classList.add("hidden");$("screenStatus").textContent="Ninguém transmitindo";$("screenStatus").classList.remove("live");
-  $("stopShareBtn").classList.add("hidden");$("shareBtn").classList.remove("hidden");
-}
-async function replaceOutgoingCamera(stream){
-  state.outgoingCamera=stream;const track=stream?.getVideoTracks()[0]||null;
-  for(const tx of state.cameraTransceivers.values())await tx.sender.replaceTrack(track).catch(()=>{});
-  renderCameras();
-}
-function stopStream(stream){stream?.getTracks().forEach(t=>t.stop())}
-function clearProcessed(){
-  stopStream(state.processedStream);state.processedStream=null;state.processedCanvas=null;
-  stopStream(state.avatarStream);state.avatarStream=null;state.avatarCanvas=null;
-}
-async function loadSegmenter(){
-  if(state.segmenter)return state.segmenter;if(state.segmenterLoading)return state.segmenterLoading;
-  state.segmenterLoading=new Promise((resolve,reject)=>{
-    const script=document.createElement("script");script.src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js";
-    script.onload=()=>{
-      try{
-        const seg=new SelfieSegmentation({locateFile:file=>"https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/"+file});
-        seg.setOptions({modelSelection:1});
-        state.segmenter=seg;resolve(seg);
-      }catch(e){reject(e)}
-    };
-    script.onerror=()=>reject(new Error("Não foi possível carregar o filtro de câmera."));document.head.appendChild(script);
-  }).catch(err=>{state.segmenterLoading=null;throw err});
-  return state.segmenterLoading;
-}
-async function applyCameraFilter(){
-  if(!state.localCamera)return;
-  if(!state.filterActive||state.filterMode==="none"){clearProcessed();await replaceOutgoingCamera(state.localCamera);return}
-  if(state.filterMode==="image"&&!state.backgroundImage){toast("Escolha uma imagem de fundo primeiro.");return}
-  try{
-    toast("Preparando efeito de câmera...");
-    state.stopFilterLoop?.();state.stopFilterLoop=null;
-    const seg=await loadSegmenter();clearProcessed();
-    const source=document.createElement("video");source.srcObject=state.localCamera;source.muted=true;source.playsInline=true;await source.play();
-    const canvas=document.createElement("canvas");canvas.width=640;canvas.height=360;
-    const ctx=canvas.getContext("2d");const stream=canvas.captureStream(24);
-    state.processedCanvas=canvas;state.processedStream=stream;
-    const foreground=document.createElement("canvas");foreground.width=640;foreground.height=360;
-    const fg=foreground.getContext("2d");
-    const blurred=document.createElement("canvas");blurred.width=640;blurred.height=360;
-    const bg=blurred.getContext("2d");
-    seg.onResults(results=>{
-      const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
-      if(state.filterMode==="blur"){
-        bg.clearRect(0,0,w,h);bg.save();bg.filter="blur(18px)";bg.drawImage(source,0,0,w,h);bg.restore();ctx.drawImage(blurred,0,0,w,h);
-      }else if(state.filterMode==="image"&&state.backgroundImage)ctx.drawImage(state.backgroundImage,0,0,w,h);
-      else{ctx.fillStyle="#080b09";ctx.fillRect(0,0,w,h)}
-      fg.clearRect(0,0,w,h);fg.globalCompositeOperation="source-over";fg.drawImage(source,0,0,w,h);
-      fg.globalCompositeOperation="destination-in";fg.drawImage(results.segmentationMask,0,0,w,h);
-      fg.globalCompositeOperation="source-over";ctx.drawImage(foreground,0,0,w,h);
-    });
-    await replaceOutgoingCamera(stream);
-    let running=true;
-    const process=async()=>{
-      if(!running||state.localCamera===null||!state.filterActive||state.cameraMode!=="camera")return;
-      if(source.readyState>=2)try{await seg.send({image:source})}catch(e){console.warn(e)}
-      requestAnimationFrame(process);
-    };
-    state.stopFilterLoop=()=>{running=false;source.pause();source.srcObject=null};
-    requestAnimationFrame(process);toast("Efeito de câmera ativado.");
-  }catch(err){console.error(err);state.filterActive=false;$("filterToggleBtn").textContent="Ativar filtro";toast(err.message||"Falha ao iniciar o filtro.")}
-}
-async function startCamera(){
-  try{
-    state.localCamera=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}},audio:false});
-    state.cameraEnabled=true;state.cameraMode="camera";$("cameraBtn").classList.add("hidden");$("cameraOffBtn").classList.remove("hidden");
-    await applyCameraFilter();renderCameras();toast("Câmera ligada.");
-  }catch(e){toast("Não foi possível acessar a câmera ou iniciar o efeito. Verifique as permissões.")}
-}
-async function stopCamera(){
-  state.stopFilterLoop?.();state.stopFilterLoop=null;stopStream(state.localCamera);state.localCamera=null;
-  state.cameraEnabled=false;state.cameraMode=null;clearProcessed();await replaceOutgoingCamera(null);
-  $("cameraBtn").classList.remove("hidden");$("cameraOffBtn").classList.add("hidden");$("avatarBtn").textContent="Usar avatar";renderCameras();
-}
-async function startAvatar(file){
-  if(!file)return;
-  try{
-    const url=URL.createObjectURL(file),img=new Image();
-    await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=url});
-    await stopCamera();state.avatarImage=img;state.cameraMode="avatar";state.cameraEnabled=true;
-    const canvas=document.createElement("canvas");canvas.width=640;canvas.height=360;
-    const ctx=canvas.getContext("2d");
-    const draw=()=>{
-      ctx.fillStyle="#101a13";ctx.fillRect(0,0,640,360);
-      const scale=Math.min(560/img.width,300/img.height),w=img.width*scale,h=img.height*scale;
-      ctx.drawImage(img,(640-w)/2,(360-h)/2,w,h);
-    };
-    draw();state.avatarCanvas=canvas;state.avatarStream=canvas.captureStream(10);
-    $("cameraBtn").classList.add("hidden");$("cameraOffBtn").classList.remove("hidden");$("avatarBtn").textContent="Avatar selecionado";
-    await replaceOutgoingCamera(state.avatarStream);renderCameras();URL.revokeObjectURL(url);toast("Avatar ativado.");
-  }catch(e){console.error(e);toast("Não foi possível carregar essa imagem.")}
-}
-async function startScreen(){
-  socket.emit("screen:request",{},async result=>{
-    if(!result?.ok)return toast(result?.error||"Não foi possível iniciar a transmissão.");
-    try{
-      const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:60,max:60}},audio:false});
-      state.localScreen=stream;const track=stream.getVideoTracks()[0];
-      for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(track);
-      $("localScreenPreview").srcObject=stream;$("localScreenPreview").classList.remove("hidden");$("screenPlaceholder").classList.add("hidden");
-      $("shareBtn").classList.add("hidden");$("stopShareBtn").classList.remove("hidden");track.onended=stopScreen;toast("Você está compartilhando sua tela.");
-    }catch(e){socket.emit("screen:stop");if(e.name!=="NotAllowedError")toast("Não foi possível iniciar a captura de tela.")}
-  });
-}
-async function stopScreen(){
-  if(!state.localScreen)return;stopStream(state.localScreen);state.localScreen=null;
-  for(const tx of state.screenTransceivers.values())await tx.sender.replaceTrack(null).catch(()=>{});
-  socket.emit("screen:stop");resetScreenDisplay();
-}
-function cleanupLocal(){
-  stopCamera().catch(()=>{});stopStream(state.localScreen);
-  for(const pc of state.pcs.values())pc.close();state.pcs.clear();
-}
-function enterRoom(data){
-  state.roomCode=data.code;state.selfId=data.selfId;state.isHost=data.isHost;
-  $("home").classList.add("hidden");$("room").classList.remove("hidden");$("roomCodeLabel").textContent="SALA "+data.code;
-  $("endRoomBtn").classList.toggle("hidden",!state.isHost);updateMembers(data.members);setConnection("Conectado à sala");
-  if(data.activeScreen){state.screenOwner=data.activeScreen;$("screenStatus").textContent="Transmissão em andamento";$("screenStatus").classList.add("live")}
-  Promise.all((data.existing||[]).map(m=>initiatePeer(m.id))).catch(console.error);
-}
-$("createBtn").addEventListener("click",()=>{
-  showHomeError("");socket.emit("room:create",{name:"Anfitrião"},result=>{if(!result?.ok)return showHomeError("Não foi possível criar a sala.");enterRoom(result)});
-});
-$("joinBtn").addEventListener("click",()=>{
-  showHomeError("");const code=$("roomCode").value.trim().toUpperCase();if(!code)return showHomeError("Digite o código da sala.");
-  socket.emit("room:join",{code,name:"Participante"},result=>{if(!result?.ok)return showHomeError(result?.error||"Não foi possível entrar.");enterRoom(result)});
-});
-$("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
-$("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
-$("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
-$("filterSelect").addEventListener("change",e=>{
-  state.filterMode=e.target.value;$("filterToggleBtn").disabled=state.filterMode==="none"||(state.filterMode==="image"&&!state.backgroundImage);
-  if(state.filterActive&&state.localCamera)applyCameraFilter();
-});
-$("backgroundUpload").addEventListener("change",e=>{
-  const file=e.target.files?.[0];if(!file)return;const url=URL.createObjectURL(file),img=new Image();
-  img.onload=()=>{state.backgroundImage=img;$("filterSelect").value="image";state.filterMode="image";$("filterToggleBtn").disabled=false;URL.revokeObjectURL(url);if(state.filterActive&&state.localCamera)applyCameraFilter();toast("Imagem de fundo carregada.")};
-  img.onerror=()=>toast("Não foi possível abrir essa imagem.");img.src=url;
-});
-$("filterToggleBtn").addEventListener("click",()=>{
-  state.filterActive=!state.filterActive;$("filterToggleBtn").textContent=state.filterActive?"Desativar filtro":"Ativar filtro";
-  if(state.localCamera)applyCameraFilter();else toast("Ligue a câmera para aplicar o filtro.");
-});
-$("avatarBtn").addEventListener("click",()=>{if(state.cameraMode==="avatar")$("avatarUpload").click();else $("avatarUpload").click()});
-$("avatarUpload").addEventListener("change",e=>startAvatar(e.target.files?.[0]));
-$("cameraZoom").addEventListener("input",e=>{
-  state.cameraZoom=Number(e.target.value);
-  $("cameraZoomValue").textContent=state.cameraZoom.toFixed(1)+"×";
-  renderCameras();
-});
-$("copyCodeBtn").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(state.roomCode);toast("Código copiado.")}catch{toast("Código da sala: "+state.roomCode)}});
-$("leaveBtn").addEventListener("click",()=>{if(state.isHost&&!confirm("Sair encerrará a sala para todos. Continuar?"))return;socket.emit("room:leave");cleanupLocal();location.reload()});
-$("endRoomBtn").addEventListener("click",()=>{if(confirm("Encerrar a sala para todos os participantes?")){socket.emit("room:leave");cleanupLocal();location.reload()}});
-socket.on("connect",()=>setConnection("Conectado ao servidor"));socket.on("disconnect",()=>setConnection("Reconectando…"));
-window.addEventListener("beforeunload",()=>{if(state.roomCode)socket.emit("room:leave")});
