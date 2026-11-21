@@ -23,33 +23,66 @@ function renderCameras(){
     const tile=document.createElement("div");tile.className="video-tile";
     const video=document.createElement("video");video.autoplay=true;video.playsInline=true;video.muted=member.id===state.selfId;
     const stream=member.id===state.selfId?state.outgoingCamera:state.remoteCameras.get(member.id);
-    if(stream){video.srcObject=stream;if(member.id===state.selfId)video.style.transform="scaleX(-1)";}
+    if(stream){video.srcObject=stream;video.style.transform=(member.id===state.selfId?"scaleX(-1) ":"")+"scale("+state.cameraZoom+")";}
     else{const empty=document.createElement("div");empty.className="no-camera";empty.textContent="Vídeo desligado";tile.appendChild(empty)}
     tile.appendChild(video);
     const name=document.createElement("div");name.className="name";name.textContent=(member.name||"Participante")+(member.id===state.selfId?" (você)":"");tile.appendChild(name);grid.appendChild(tile);
   }
   $("cameraStatus").textContent=state.cameraMode==="avatar"?"Avatar ativo":state.cameraEnabled?"Sua câmera está ligada":"Vídeo desligado";
 }
-function makePeer(peerId){
+function mapPeerTransceivers(peerId,pc){
+  const transceivers=pc.getTransceivers().sort((a,b)=>(Number(a.mid)||0)-(Number(b.mid)||0));
+  const screenTx=transceivers[0],cameraTx=transceivers[1];
+  if(screenTx)state.screenTransceivers.set(peerId,screenTx);
+  if(cameraTx)state.cameraTransceivers.set(peerId,cameraTx);
+}
+async function syncLocalTracks(peerId){
+  const screenTx=state.screenTransceivers.get(peerId),cameraTx=state.cameraTransceivers.get(peerId);
+  if(screenTx)await screenTx.sender.replaceTrack(state.localScreen?.getVideoTracks()[0]||null).catch(()=>{});
+  if(cameraTx)await cameraTx.sender.replaceTrack(state.outgoingCamera?.getVideoTracks()[0]||null).catch(()=>{});
+}
+function makePeer(peerId,offerer=false){
   if(state.pcs.has(peerId))return state.pcs.get(peerId);
   const pc=new RTCPeerConnection(rtcConfig);
-  const screenTx=pc.addTransceiver("video",{direction:"sendrecv"}),cameraTx=pc.addTransceiver("video",{direction:"sendrecv"});
-  state.screenTransceivers.set(peerId,screenTx);state.cameraTransceivers.set(peerId,cameraTx);
-  if(state.localScreen?.getVideoTracks()[0])screenTx.sender.replaceTrack(state.localScreen.getVideoTracks()[0]).catch(()=>{});
-  if(state.outgoingCamera?.getVideoTracks()[0])cameraTx.sender.replaceTrack(state.outgoingCamera.getVideoTracks()[0]).catch(()=>{});
+  // Só quem cria a oferta adiciona as transceivers. Quem responde usa as
+  // transceivers negociadas na oferta recebida, evitando linhas de mídia duplicadas.
+  if(offerer){
+    pc.addTransceiver("video",{direction:"sendrecv"});
+    pc.addTransceiver("video",{direction:"sendrecv"});
+  }
   pc.onicecandidate=e=>{if(e.candidate)socket.emit("signal",{to:peerId,candidate:e.candidate})};
   pc.ontrack=e=>{
     const stream=e.streams[0]||new MediaStream([e.track]);
-    if(e.transceiver===screenTx||e.transceiver.mid==="0"){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId)}
+    const isScreen=e.transceiver===state.screenTransceivers.get(peerId)||e.transceiver.mid==="0";
+    if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId)}
     else{state.remoteCameras.set(peerId,stream);renderCameras()}
   };
   pc.onconnectionstatechange=()=>{if(pc.connectionState==="failed")pc.restartIce()};
-  state.pcs.set(peerId,pc);return pc;
+  state.pcs.set(peerId,pc);
+  if(offerer)mapPeerTransceivers(peerId,pc);
+  return pc;
 }
-async function initiatePeer(peerId){const pc=makePeer(peerId);const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit("signal",{to:peerId,description:pc.localDescription})}
+async function initiatePeer(peerId){
+  const pc=makePeer(peerId,true);
+  await syncLocalTracks(peerId);
+  const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+  socket.emit("signal",{to:peerId,description:pc.localDescription});
+}
 socket.on("signal",async({from,description,candidate})=>{
-  try{const pc=makePeer(from);if(description){await pc.setRemoteDescription(description);if(description.type==="offer"){const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit("signal",{to:from,description:pc.localDescription})}}else if(candidate)await pc.addIceCandidate(candidate)}
-  catch(err){console.error("Falha na negociação WebRTC",err)}
+  try{
+    const pc=makePeer(from,false);
+    if(description){
+      await pc.setRemoteDescription(description);
+      if(description.type==="offer"){
+        mapPeerTransceivers(from,pc);
+        await syncLocalTracks(from);
+        const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
+        socket.emit("signal",{to:from,description:pc.localDescription});
+      }
+    }else if(candidate){
+      await pc.addIceCandidate(candidate);
+    }
+  }catch(err){console.error("Falha na negociação WebRTC",err)}
 });
 socket.on("peer:left",({peerId})=>{
   state.pcs.get(peerId)?.close();state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);
