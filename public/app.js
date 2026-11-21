@@ -19,6 +19,10 @@ function updateMembers(members){
 }
 function renderCameras(){
   const grid=$("videoGrid");
+  const cameraPanel=$("cameraPanel");
+  const memberTotal=Math.max(1,state.members.size);
+  cameraPanel.dataset.participants=String(memberTotal);
+  grid.dataset.participants=String(memberTotal);
   const activeIds=new Set(state.members.keys());
   for(const [id,data] of state.cameraTiles){if(!activeIds.has(id)){data.tile.remove();state.cameraTiles.delete(id);}}
   for(const member of state.members.values()){
