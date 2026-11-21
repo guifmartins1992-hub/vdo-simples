@@ -41,12 +41,19 @@ function renderCameras(){
 }
 
 function mapPeerTransceivers(peerId,pc){
+  // O SDP mantém a ordem das faixas: m-line 0 = tela; m-line 1 = câmera.
   const transceivers=pc.getTransceivers().slice().sort((a,b)=>{
     const am=a.mid===null?999:Number(a.mid),bm=b.mid===null?999:Number(b.mid);
     return am-bm;
   });
-  if(transceivers[0])state.screenTransceivers.set(peerId,transceivers[0]);
-  if(transceivers[1])state.cameraTransceivers.set(peerId,transceivers[1]);
+  const screenTx=transceivers.find(tx=>tx.mid==="0")||transceivers[0];
+  const cameraTx=transceivers.find(tx=>tx.mid==="1")||transceivers[1];
+  if(screenTx){screenTx.direction="sendrecv";state.screenTransceivers.set(peerId,screenTx);}
+  if(cameraTx){cameraTx.direction="sendrecv";state.cameraTransceivers.set(peerId,cameraTx);}
+  console.info("Faixas WebRTC mapeadas",peerId,{
+    screen:{mid:screenTx?.mid,direction:screenTx?.direction},
+    camera:{mid:cameraTx?.mid,direction:cameraTx?.direction}
+  });
 }
 async function syncLocalTracks(peerId){
   const screenTx=state.screenTransceivers.get(peerId),cameraTx=state.cameraTransceivers.get(peerId);
@@ -107,8 +114,11 @@ socket.on("signal",async({from,description,candidate})=>{
     if(description){
       await pc.setRemoteDescription(description);
       if(description.type==="offer"){
-        mapPeerTransceivers(from,pc);await syncLocalTracks(from);
-        const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
+        mapPeerTransceivers(from,pc);
+        await syncLocalTracks(from);
+        const answer=await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        console.info("Resposta SDP enviada",from,pc.localDescription.sdp.split("\\r\\n").filter(line=>line.startsWith("a=send")||line.startsWith("a=recv")||line.startsWith("m=video")));
         socket.emit("signal",{to:from,description:pc.localDescription});
       }
       await flushIceCandidates(from,pc);
@@ -141,11 +151,28 @@ async function reloadReceivedMedia(){
   if(!state.roomCode)return;
   const peers=[...state.members.keys()].filter(id=>id!==state.selfId);
   if(!peers.length){toast("Não há outros participantes para recuperar.");return;}
-  setConnection("Recuperando somente as câmeras…");
+  setConnection("Solicitando atualização das câmeras…");
   socket.emit("camera:refresh");
   await Promise.all(peers.map(refreshCameraToPeer));
-  setConnection("Câmeras atualizadas");
-  toast("Solicitei a atualização das câmeras sem reiniciar a transmissão de tela.");
+  setConnection("Solicitação de câmeras enviada");
+  toast("Solicitei aos participantes que reenviem suas câmeras.");
+}
+async function refreshScreenToPeer(peerId){
+  const tx=state.screenTransceivers.get(peerId);
+  const track=state.localScreen?.getVideoTracks()[0]||null;
+  if(!tx||!track||track.readyState!=="live")return;
+  try{await tx.sender.replaceTrack(track);}
+  catch(err){console.warn("Falha ao reativar envio da tela",peerId,err);}
+}
+async function reloadReceivedScreen(){
+  if(!state.roomCode)return;
+  const peers=[...state.members.keys()].filter(id=>id!==state.selfId);
+  if(!peers.length){toast("Não há outros participantes para recuperar.");return;}
+  setConnection("Solicitando atualização da transmissão…");
+  socket.emit("screen:refresh");
+  await Promise.all(peers.map(refreshScreenToPeer));
+  setConnection("Solicitação de transmissão enviada");
+  toast("Solicitei ao transmissor que reenvie a tela, sem reiniciar a sala.");
 }
 
 async function reloadMyScreen(){
@@ -194,6 +221,9 @@ async function reloadMyCameras(){
 socket.on("peer:left",({peerId})=>{discardPeer(peerId);if(state.screenOwner===peerId)resetScreenDisplay();renderCameras();});
 socket.on("camera:refresh",async({from})=>{
   await refreshCameraToPeer(from);
+});
+socket.on("screen:refresh",async({from})=>{
+  await refreshScreenToPeer(from);
 });
 socket.on("room:members",({members})=>updateMembers(members));
 socket.on("screen:started",({peerId})=>{
@@ -354,7 +384,7 @@ $("joinBtn").addEventListener("click",()=>{
 });
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
-$("reloadScreenBtn").addEventListener("click",reloadReceivedMedia);$("reloadCamerasBtn").addEventListener("click",reloadReceivedMedia);
+$("reloadScreenBtn").addEventListener("click",reloadReceivedScreen);$("reloadCamerasBtn").addEventListener("click",reloadReceivedMedia);
 $("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
 $("filterSelect").addEventListener("change",e=>{
   state.filterMode=e.target.value;$("filterToggleBtn").disabled=state.filterMode==="none"||(state.filterMode==="image"&&!state.backgroundImage);
