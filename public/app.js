@@ -99,6 +99,31 @@ socket.on("signal",async({from,description,candidate})=>{
     }
   }catch(err){console.error("Falha na negociação WebRTC",err);}
 });
+function discardPeer(peerId){
+  const pc=state.pcs.get(peerId);
+  if(pc){pc.ontrack=null;pc.onicecandidate=null;pc.close();}
+  state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);
+  state.pendingCandidates.delete(peerId);state.remoteScreens.delete(peerId);state.remoteCameras.delete(peerId);
+  const tile=state.cameraTiles.get(peerId);
+  if(tile){tile.video.srcObject=null;tile.video.classList.add("hidden");tile.empty.classList.remove("hidden");}
+  if(state.screenOwner===peerId){$("remoteScreen").srcObject=null;$("remoteScreen").classList.add("hidden");}
+}
+async function reloadReceivedMedia(){
+  if(!state.roomCode)return;
+  const peers=[...state.members.keys()].filter(id=>id!==state.selfId);
+  if(!peers.length){toast("Não há outros participantes para reconectar.");return;}
+  setConnection("Reconectando mídias recebidas…");
+  socket.emit("peer:reset",{},async(result)=>{
+    if(!result?.ok){toast("Não foi possível solicitar a reconexão.");return;}
+    for(const id of peers)discardPeer(id);
+    try{
+      await Promise.all(peers.map(id=>initiatePeer(id)));
+      setConnection("Reconexão solicitada");
+      toast("Reconectando transmissão e câmeras dos outros participantes.");
+    }catch(err){console.error("Falha ao recuperar mídias recebidas",err);toast("Falha ao reconectar. Tente novamente.");}
+  });
+}
+
 async function reloadMyScreen(){
   if(!state.localScreen){toast("Apenas quem está transmitindo pode recarregar a própria transmissão.");return;}
   try{
@@ -142,7 +167,8 @@ async function reloadMyCameras(){
   }
   toast("Ligue sua câmera ou selecione um avatar para recarregar.");
 }
-socket.on("peer:left",({peerId})=>{discardPeer(peerId);if(state.screenOwner===peerId)resetScreenDisplay();});
+socket.on("peer:left",({peerId})=>{discardPeer(peerId);if(state.screenOwner===peerId)resetScreenDisplay();renderCameras();});
+socket.on("peer:reset",({from})=>{discardPeer(from);renderCameras();});
 socket.on("room:members",({members})=>updateMembers(members));
 socket.on("screen:started",({peerId})=>{
   state.screenOwner=peerId;const name=state.members.get(peerId)?.name||"Participante";
@@ -302,7 +328,7 @@ $("joinBtn").addEventListener("click",()=>{
 });
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
-$("reloadScreenBtn").addEventListener("click",reloadMyScreen);$("reloadCamerasBtn").addEventListener("click",reloadMyCameras);
+$("reloadScreenBtn").addEventListener("click",reloadReceivedMedia);$("reloadCamerasBtn").addEventListener("click",reloadReceivedMedia);
 $("cameraBtn").addEventListener("click",startCamera);$("cameraOffBtn").addEventListener("click",stopCamera);
 $("filterSelect").addEventListener("change",e=>{
   state.filterMode=e.target.value;$("filterToggleBtn").disabled=state.filterMode==="none"||(state.filterMode==="image"&&!state.backgroundImage);
