@@ -105,31 +105,25 @@ async function applyCameraFilter(){
   if(state.filterMode==="image"&&!state.backgroundImage){toast("Escolha uma imagem de fundo primeiro.");return}
   try{
     toast("Preparando efeito de câmera...");
+    state.stopFilterLoop?.();state.stopFilterLoop=null;
     const seg=await loadSegmenter();clearProcessed();
     const source=document.createElement("video");source.srcObject=state.localCamera;source.muted=true;source.playsInline=true;await source.play();
     const canvas=document.createElement("canvas");canvas.width=640;canvas.height=360;
     const ctx=canvas.getContext("2d");const stream=canvas.captureStream(24);
     state.processedCanvas=canvas;state.processedStream=stream;
+    const foreground=document.createElement("canvas");foreground.width=640;foreground.height=360;
+    const fg=foreground.getContext("2d");
+    const blurred=document.createElement("canvas");blurred.width=640;blurred.height=360;
+    const bg=blurred.getContext("2d");
     seg.onResults(results=>{
       const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
       if(state.filterMode==="blur"){
-        ctx.save();ctx.filter="blur(16px)";ctx.drawImage(source,0,0,w,h);ctx.restore();
-      }else if(state.filterMode==="image"&&state.backgroundImage){
-        ctx.drawImage(state.backgroundImage,0,0,w,h);
-      }else{
-        ctx.fillStyle="#080b09";ctx.fillRect(0,0,w,h);
-      }
-      ctx.save();ctx.globalCompositeOperation="destination-over";
-      if(state.filterMode==="blur"){ctx.filter="blur(16px)";ctx.drawImage(source,0,0,w,h);ctx.filter="none"}
-      else if(state.filterMode==="image"&&state.backgroundImage)ctx.drawImage(state.backgroundImage,0,0,w,h);
+        bg.clearRect(0,0,w,h);bg.save();bg.filter="blur(18px)";bg.drawImage(source,0,0,w,h);bg.restore();ctx.drawImage(blurred,0,0,w,h);
+      }else if(state.filterMode==="image"&&state.backgroundImage)ctx.drawImage(state.backgroundImage,0,0,w,h);
       else{ctx.fillStyle="#080b09";ctx.fillRect(0,0,w,h)}
-      ctx.restore();
-      ctx.save();ctx.globalCompositeOperation="destination-in";ctx.drawImage(results.segmentationMask,0,0,w,h);ctx.restore();
-      ctx.save();ctx.globalCompositeOperation="destination-over";
-      if(state.filterMode==="blur"){ctx.filter="blur(16px)";ctx.drawImage(source,0,0,w,h);ctx.filter="none"}
-      else if(state.filterMode==="image"&&state.backgroundImage)ctx.drawImage(state.backgroundImage,0,0,w,h);
-      else{ctx.fillStyle="#080b09";ctx.fillRect(0,0,w,h)}
-      ctx.restore();
+      fg.clearRect(0,0,w,h);fg.globalCompositeOperation="source-over";fg.drawImage(source,0,0,w,h);
+      fg.globalCompositeOperation="destination-in";fg.drawImage(results.segmentationMask,0,0,w,h);
+      fg.globalCompositeOperation="source-over";ctx.drawImage(foreground,0,0,w,h);
     });
     await replaceOutgoingCamera(stream);
     let running=true;
