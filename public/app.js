@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const state = {
   cameraZoom:1,roomCode:null,selfId:null,isHost:false,members:new Map(),pcs:new Map(),
   localCamera:null,outgoingCamera:null,localScreen:null,screenOwner:null,remoteScreens:new Map(),
-  remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),
+  remoteCameras:new Map(),cameraEnabled:false,screenTransceivers:new Map(),cameraTransceivers:new Map(),pendingCandidates:new Map(),
   activeTab:"screenPanel",cameraMode:null,avatarImage:null,backgroundImage:null,
   filterMode:"none",filterActive:false,segmenter:null,segmenterLoading:null,
   processedCanvas:null,processedStream:null,avatarCanvas:null,avatarStream:null
@@ -31,40 +31,44 @@ function renderCameras(){
   $("cameraStatus").textContent=state.cameraMode==="avatar"?"Avatar ativo":state.cameraEnabled?"Sua câmera está ligada":"Vídeo desligado";
 }
 function mapPeerTransceivers(peerId,pc){
-  const transceivers=pc.getTransceivers().sort((a,b)=>(Number(a.mid)||0)-(Number(b.mid)||0));
-  const screenTx=transceivers[0],cameraTx=transceivers[1];
-  if(screenTx)state.screenTransceivers.set(peerId,screenTx);
-  if(cameraTx)state.cameraTransceivers.set(peerId,cameraTx);
+  const transceivers=pc.getTransceivers().slice().sort((a,b)=>{
+    const am=a.mid===null?999:Number(a.mid),bm=b.mid===null?999:Number(b.mid);
+    return am-bm;
+  });
+  if(transceivers[0])state.screenTransceivers.set(peerId,transceivers[0]);
+  if(transceivers[1])state.cameraTransceivers.set(peerId,transceivers[1]);
 }
 async function syncLocalTracks(peerId){
   const screenTx=state.screenTransceivers.get(peerId),cameraTx=state.cameraTransceivers.get(peerId);
-  if(screenTx)await screenTx.sender.replaceTrack(state.localScreen?.getVideoTracks()[0]||null).catch(()=>{});
-  if(cameraTx)await cameraTx.sender.replaceTrack(state.outgoingCamera?.getVideoTracks()[0]||null).catch(()=>{});
+  if(screenTx)await screenTx.sender.replaceTrack(state.localScreen?.getVideoTracks()[0]||null);
+  if(cameraTx)await cameraTx.sender.replaceTrack(state.outgoingCamera?.getVideoTracks()[0]||null);
+}
+async function flushIceCandidates(peerId,pc){
+  const queued=state.pendingCandidates.get(peerId)||[];
+  state.pendingCandidates.set(peerId,[]);
+  for(const candidate of queued){try{await pc.addIceCandidate(candidate)}catch(err){console.warn("Candidato ICE não aplicado",err)}}
 }
 function makePeer(peerId,offerer=false){
   if(state.pcs.has(peerId))return state.pcs.get(peerId);
   const pc=new RTCPeerConnection(rtcConfig);
-  // Só quem cria a oferta adiciona as transceivers. Quem responde usa as
-  // transceivers negociadas na oferta recebida, evitando linhas de mídia duplicadas.
-  if(offerer){
-    pc.addTransceiver("video",{direction:"sendrecv"});
-    pc.addTransceiver("video",{direction:"sendrecv"});
-  }
+  if(offerer){pc.addTransceiver("video",{direction:"sendrecv"});pc.addTransceiver("video",{direction:"sendrecv"});}
   pc.onicecandidate=e=>{if(e.candidate)socket.emit("signal",{to:peerId,candidate:e.candidate})};
   pc.ontrack=e=>{
-    const stream=e.streams[0]||new MediaStream([e.track]);
-    const isScreen=e.transceiver===state.screenTransceivers.get(peerId)||e.transceiver.mid==="0";
-    if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId)}
-    else{state.remoteCameras.set(peerId,stream);renderCameras()}
+    const stream=e.streams?.[0]||new MediaStream([e.track]);
+    const isScreen=e.transceiver.mid==="0";
+    if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId);}
+    else{state.remoteCameras.set(peerId,stream);renderCameras();}
+    e.track.onunmute=()=>{
+      if(isScreen){state.remoteScreens.set(peerId,stream);if(state.screenOwner===peerId)showRemoteScreen(peerId);}
+      else{state.remoteCameras.set(peerId,stream);renderCameras();}
+    };
   };
-  pc.onconnectionstatechange=()=>{if(pc.connectionState==="failed")pc.restartIce()};
-  state.pcs.set(peerId,pc);
-  if(offerer)mapPeerTransceivers(peerId,pc);
-  return pc;
+  pc.oniceconnectionstatechange=()=>{console.info("WebRTC ICE",peerId,pc.iceConnectionState);if(pc.iceConnectionState==="failed")pc.restartIce();};
+  pc.onconnectionstatechange=()=>console.info("WebRTC conexão",peerId,pc.connectionState);
+  state.pcs.set(peerId,pc);if(offerer)mapPeerTransceivers(peerId,pc);return pc;
 }
 async function initiatePeer(peerId){
-  const pc=makePeer(peerId,true);
-  await syncLocalTracks(peerId);
+  const pc=makePeer(peerId,true);await syncLocalTracks(peerId);
   const offer=await pc.createOffer();await pc.setLocalDescription(offer);
   socket.emit("signal",{to:peerId,description:pc.localDescription});
 }
@@ -74,18 +78,19 @@ socket.on("signal",async({from,description,candidate})=>{
     if(description){
       await pc.setRemoteDescription(description);
       if(description.type==="offer"){
-        mapPeerTransceivers(from,pc);
-        await syncLocalTracks(from);
+        mapPeerTransceivers(from,pc);await syncLocalTracks(from);
         const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
         socket.emit("signal",{to:from,description:pc.localDescription});
       }
+      await flushIceCandidates(from,pc);
     }else if(candidate){
-      await pc.addIceCandidate(candidate);
+      if(pc.remoteDescription?.type)await pc.addIceCandidate(candidate);
+      else{const queue=state.pendingCandidates.get(from)||[];queue.push(candidate);state.pendingCandidates.set(from,queue);}
     }
-  }catch(err){console.error("Falha na negociação WebRTC",err)}
+  }catch(err){console.error("Falha na negociação WebRTC",err);}
 });
 socket.on("peer:left",({peerId})=>{
-  state.pcs.get(peerId)?.close();state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);
+  state.pcs.get(peerId)?.close();state.pcs.delete(peerId);state.screenTransceivers.delete(peerId);state.cameraTransceivers.delete(peerId);state.pendingCandidates.delete(peerId);
   state.remoteCameras.delete(peerId);state.remoteScreens.delete(peerId);if(state.screenOwner===peerId)resetScreenDisplay();renderCameras();
 });
 socket.on("room:members",({members})=>updateMembers(members));
