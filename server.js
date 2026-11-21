@@ -84,6 +84,13 @@ io.on("connection", socket => {
     socket.to(code).emit("camera:refresh", { from: socket.id });
   });
 
+  socket.on("screen:refresh", () => {
+    const code = socket.data.roomCode;
+    const room = code && rooms.get(code);
+    if (!room || !room.members.has(socket.id)) return;
+    socket.to(code).emit("screen:refresh", { from: socket.id });
+  });
+
   socket.on("signal", ({ to, description, candidate } = {}) => {
     const code = socket.data.roomCode;
     const room = code && rooms.get(code);
