@@ -1,15 +1,48 @@
 {
   "name": "vdo-simples",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Salas temporarias de compartilhamento de tela e cameras com WebRTC",
+  "description": "VDO Simples - compartilhamento de tela e câmeras com WebRTC",
+  "main": "desktop/main.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "desktop": "electron .",
+    "dist": "electron-builder --win nsis"
   },
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1"
   },
-  "engines": { "node": ">=20" }
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "br.com.vdosimples.desktop",
+    "productName": "VDO Simples",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "desktop/**/*",
+      "public/**/*",
+      "server.js",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "VDO-Simples-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VDO Simples"
+    }
+  }
 }
