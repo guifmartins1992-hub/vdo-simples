@@ -426,12 +426,28 @@ function enterRoom(data){
   if(data.activeScreen){state.screenOwner=data.activeScreen;$("screenStatus").textContent="Transmissão em andamento";$("screenStatus").classList.add("live")}
   Promise.all((data.existing||[]).map(m=>initiatePeer(m.id))).catch(console.error);
 }
+function joinRoomByCode(code){
+  showHomeError("");const normalized=String(code||"").trim().toUpperCase();if(!normalized)return showHomeError("Digite o código da sala.");
+  socket.emit("room:join",{code:normalized,name:"Participante"},result=>{if(!result?.ok)return showHomeError(result?.error||"Não foi possível entrar.");enterRoom(result)});
+}
+async function updateDesktopInvite(code){
+  const panel=$("desktopInvitePanel");
+  if(!panel||!window.vdoDesktop?.isDesktop||!state.isHost)return;
+  panel.classList.remove("hidden");
+  $("desktopInviteLink").value="Preparando link público…";
+  try{$("desktopInviteLink").value=await window.vdoDesktop.getInviteLink(code);}
+  catch(err){$("desktopInviteLink").value="Aguardando conexão pública…";console.error(err);}
+}
 $("createBtn").addEventListener("click",()=>{
-  showHomeError("");socket.emit("room:create",{name:"Anfitrião"},result=>{if(!result?.ok)return showHomeError("Não foi possível criar a sala.");enterRoom(result)});
+  showHomeError("");socket.emit("room:create",{name:"Anfitrião"},result=>{if(!result?.ok)return showHomeError("Não foi possível criar a sala.");enterRoom(result);updateDesktopInvite(result.code)});
 });
-$("joinBtn").addEventListener("click",()=>{
-  showHomeError("");const code=$("roomCode").value.trim().toUpperCase();if(!code)return showHomeError("Digite o código da sala.");
-  socket.emit("room:join",{code,name:"Participante"},result=>{if(!result?.ok)return showHomeError(result?.error||"Não foi possível entrar.");enterRoom(result)});
+$("joinBtn").addEventListener("click",()=>joinRoomByCode($("roomCode").value));
+const inviteFromUrl=new URLSearchParams(location.search).get("room");
+if(inviteFromUrl){$("roomCode").value=inviteFromUrl.toUpperCase();socket.on("connect",()=>{if(inviteFromUrl&&!state.roomCode)joinRoomByCode(inviteFromUrl)});}
+if(window.vdoDesktop?.isDesktop){document.documentElement.classList.add("vdo-desktop");window.vdoDesktop.onTunnelReady(()=>{if(state.isHost&&state.roomCode)updateDesktopInvite(state.roomCode)});}
+$("copyInviteBtn")?.addEventListener("click",async()=>{
+  try{await navigator.clipboard.writeText($("desktopInviteLink").value);toast("Link da sala copiado!");}
+  catch{const field=$("desktopInviteLink");field.select();document.execCommand("copy");toast("Link da sala copiado!");}
 });
 $("roomCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("shareBtn").addEventListener("click",startScreen);$("stopShareBtn").addEventListener("click",stopScreen);
