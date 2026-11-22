@@ -47,13 +47,15 @@
             <video id="remoteScreen" autoplay playsinline class="hidden"></video>
             <video id="localScreenPreview" autoplay muted playsinline class="hidden"></video>
             <div id="screenOwner" class="screen-owner hidden"></div>
+            <section id="screenAudioPanel" class="screen-audio-panel hidden" aria-label="Controle local do áudio"><button id="screenAudioMute" class="audio-mute" type="button" data-muted="false" aria-label="Silenciar áudio">♪</button><input id="screenAudioVolume" type="range" min="0" max="100" value="100" aria-label="Volume local da transmissão"><span id="screenAudioVolumeValue">100%</span></section>
           </div>
           <div class="controls">
             <button id="shareBtn" class="primary">▣ Compartilhar minha tela</button>
             <button id="stopShareBtn" class="secondary hidden">Parar transmissão</button>
             <button id="reloadScreenBtn" class="secondary">↻ Recuperar transmissão recebida</button>
           </div>
-          <p class="hint">Somente imagem, sem áudio do computador.</p>
+          <audio id="remoteScreenAudio" autoplay playsinline></audio>
+          <p id="screenAudioHint" class="hint">Para áudio isolado, compartilhe uma guia ou uma janela. Ao escolher uma janela, marque a opção de compartilhar o áudio da janela (quando disponível). A tela inteira não transmite áudio.</p>
         </section>
 
         <aside id="cameraPanel" class="camera-panel">
@@ -102,6 +104,6 @@
   </main>
   <div id="toast" class="toast" role="status"></div>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js?v=20261121-camera-effects3"></script>
+  <script src="/app.js?v=20261121-window-audio1"></script>
 </body>
 </html>
