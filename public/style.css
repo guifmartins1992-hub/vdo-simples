@@ -54,3 +54,14 @@
 .room-footer{padding-top:6px;gap:8px;font-size:10px}
 @media(max-width:850px){.workspace{gap:6px;padding:6px 0;grid-template-columns:minmax(0,1fr) 215px}.screen-panel{padding:7px}.camera-panel{padding:7px}}
 @media(max-width:650px){.room-screen{padding:0 7px 8px}.workspace{height:auto;max-height:none;padding:6px 0;gap:7px}.screen-panel{padding:7px;min-height:42vh}.screen-stage{min-height:210px}.camera-panel{padding:7px}.video-grid{grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:5px}.video-tile{aspect-ratio:1!important;min-height:0;height:auto!important}.camera-tools{max-height:none;overflow:visible}.room-header{min-height:52px;padding:6px 0}.room-footer{padding-top:6px}}
+
+/* Convite de sala no aplicativo Windows */
+.desktop-invite-panel{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:0 0 4px;border:1px solid #28583a;border-radius:9px;background:linear-gradient(110deg,#102318,#0a130d)}
+.desktop-invite-copy{display:flex;flex-direction:column;gap:2px;min-width:190px}
+.desktop-invite-copy strong{font-size:12px;color:#e9f7ed}
+.desktop-invite-copy span{font-size:10px;color:#9bb5a2}
+.desktop-invite-panel input{flex:1;min-width:0;background:#07100a;border:1px solid #31513b;border-radius:6px;padding:8px;color:#b9f6c8;font-size:11px}
+.desktop-invite-panel button{white-space:nowrap;padding:8px 12px;font-size:10px}
+html.vdo-desktop .home-screen{min-height:100vh}
+html.vdo-desktop .room-screen{height:100vh}
+@media(max-width:700px){.desktop-invite-panel{flex-wrap:wrap}.desktop-invite-copy{width:100%}.desktop-invite-panel input{flex-basis:100%}.desktop-invite-panel button{width:100%}}
