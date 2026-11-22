@@ -40,7 +40,7 @@ ipcMain.handle("vdo:get-invite-link",async(_event,code)=>{
  return tunnelUrl+"/?room="+encodeURIComponent(code);
 });
 app.whenReady().then(async()=>{
- process.env.PORT="3001";process.chdir(app.getAppPath());vdoServer=require(path.join(app.getAppPath(),"server.js")).server;createWindow();
+ process.env.PORT="3001";vdoServer=require(path.join(app.getAppPath(),"server.js")).server;await new Promise(resolve=>vdoServer.listening?resolve():vdoServer.once("listening",resolve));createWindow();
  try{await startTunnel();}catch(error){sendStatus("Link público indisponível: "+error.message);dialog.showMessageBox(mainWindow,{type:"warning",title:"Conexão pública indisponível",message:"O VDO abriu, mas não conseguiu preparar o link para convidados.",detail:error.message});}
 });
 app.on("before-quit",()=>{if(tunnelProcess&&!tunnelProcess.killed)tunnelProcess.kill();if(vdoServer&&vdoServer.listening)vdoServer.close();});
