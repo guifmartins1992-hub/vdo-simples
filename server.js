@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
 const crypto = require("crypto");
@@ -9,7 +10,7 @@ const io = new Server(server, { cors: { origin: process.env.CORS_ORIGIN || "*" }
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
 
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
 app.get("/health", (_req, res) => res.json({ ok: true, rooms: rooms.size }));
 
 function makeCode() {
@@ -122,3 +123,4 @@ io.on("connection", socket => {
 });
 
 server.listen(PORT, () => console.log(`Vdo Simples rodando na porta ${PORT}`));
+module.exports = { server, io };
