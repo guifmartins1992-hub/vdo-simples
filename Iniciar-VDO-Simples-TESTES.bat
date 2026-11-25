@@ -1,8 +1,8 @@
 @echo off
 setlocal EnableExtensions
-title VDO SIMPLES - VERSAO DE TESTE
+title V-EET - VERSAO DE TESTE
 
-set "APP_DIR=%LOCALAPPDATA%\VdoSimples-Testes"
+set "APP_DIR=%LOCALAPPDATA%\Veet-Testes"
 set "REPO_ZIP=https://github.com/guifmartins1992-hub/vdo-simples/archive/refs/heads/testes.zip"
 set "PORT=3001"
 
@@ -33,7 +33,7 @@ if not exist "%APP_DIR%\server.js" (
   if exist "%APP_DIR%" rmdir /s /q "%APP_DIR%"
   mkdir "%APP_DIR%" 2>nul
   powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'vdo-simples-testes.zip'; $extract=Join-Path $env:TEMP ('vdo-testes-'+[guid]::NewGuid().ToString()); Invoke-WebRequest -Uri '%REPO_ZIP%' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; $folder=Get-ChildItem $extract -Directory | Select-Object -First 1; if(-not $folder){throw 'Pasta extraida nao encontrada'}; Copy-Item (Join-Path $folder.FullName '*') '%APP_DIR%' -Recurse -Force; Remove-Item $zip -Force; Remove-Item $extract -Recurse -Force"
+    "$ErrorActionPreference='Stop'; $zip=Join-Path $env:TEMP 'veet-testes.zip'; $extract=Join-Path $env:TEMP ('veet-testes-'+[guid]::NewGuid().ToString()); Invoke-WebRequest -Uri '%REPO_ZIP%' -OutFile $zip; Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force; $folder=Get-ChildItem $extract -Directory | Select-Object -First 1; if(-not $folder){throw 'Pasta extraida nao encontrada'}; Copy-Item (Join-Path $folder.FullName '*') '%APP_DIR%' -Recurse -Force; Remove-Item $zip -Force; Remove-Item $extract -Recurse -Force"
   if errorlevel 1 (
     echo.
     echo ERRO ao baixar a branch TESTES.
@@ -75,7 +75,7 @@ if not defined CLOUDFLARED (
 
 echo.
 echo Iniciando servidor da VERSAO DE TESTE...
-start "VDO SIMPLES - VERSAO DE TESTE (SERVIDOR)" cmd /k "cd /d ""%APP_DIR%"" && set PORT=%PORT% && node server.js"
+start "V-EET - VERSAO DE TESTE (SERVIDOR)" cmd /k "cd /d ""%APP_DIR%"" && set PORT=%PORT% && node server.js"
 
 timeout /t 3 /nobreak >nul
 
@@ -84,7 +84,7 @@ echo.
 echo IMPORTANTE: mantenha abertas as janelas do servidor e do tunnel.
 echo Para encerrar, feche as duas janelas ou pressione Ctrl+C em cada uma.
 echo.
-start "VDO SIMPLES - VERSAO DE TESTE (TUNNEL)" cmd /k """%CLOUDFLARED%"" tunnel --url http://localhost:%PORT%"
+start "V-EET - VERSAO DE TESTE (TUNNEL)" cmd /k """%CLOUDFLARED%"" tunnel --url http://localhost:%PORT%"
 
 echo ============================================================
 echo                    VERSAO DE TESTE
