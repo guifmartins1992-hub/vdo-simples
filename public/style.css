@@ -62,6 +62,6 @@
 .desktop-invite-copy span{font-size:10px;color:#9bb5a2}
 .desktop-invite-panel input{flex:1;min-width:0;background:#07100a;border:1px solid #31513b;border-radius:6px;padding:8px;color:#b9f6c8;font-size:11px}
 .desktop-invite-panel button{white-space:nowrap;padding:8px 12px;font-size:10px}
-html.vdo-desktop .home-screen{min-height:100vh}
-html.vdo-desktop .room-screen{height:100vh}
+html.veet-desktop .home-screen{min-height:100vh}
+html.veet-desktop .room-screen{height:100vh}
 @media(max-width:700px){.desktop-invite-panel{flex-wrap:wrap}.desktop-invite-copy{width:100%}.desktop-invite-panel input{flex-basis:100%}.desktop-invite-panel button{width:100%}}
