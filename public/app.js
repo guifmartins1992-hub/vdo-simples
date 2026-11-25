@@ -432,10 +432,10 @@ function joinRoomByCode(code){
 }
 async function updateDesktopInvite(code){
   const panel=$("desktopInvitePanel");
-  if(!panel||!window.vdoDesktop?.isDesktop||!state.isHost)return;
+  if(!panel||!window.veetDesktop?.isDesktop||!state.isHost)return;
   panel.classList.remove("hidden");
   $("desktopInviteLink").value="Preparando link público…";
-  try{$("desktopInviteLink").value=await window.vdoDesktop.getInviteLink(code);}
+  try{$("desktopInviteLink").value=await window.veetDesktop.getInviteLink(code);}
   catch(err){$("desktopInviteLink").value="Aguardando conexão pública…";console.error(err);}
 }
 $("createBtn").addEventListener("click",()=>{
@@ -444,7 +444,7 @@ $("createBtn").addEventListener("click",()=>{
 $("joinBtn").addEventListener("click",()=>joinRoomByCode($("roomCode").value));
 const inviteFromUrl=new URLSearchParams(location.search).get("room");
 if(inviteFromUrl){$("roomCode").value=inviteFromUrl.toUpperCase();socket.on("connect",()=>{if(inviteFromUrl&&!state.roomCode)joinRoomByCode(inviteFromUrl)});}
-if(window.vdoDesktop?.isDesktop){document.documentElement.classList.add("vdo-desktop");window.vdoDesktop.onTunnelReady(()=>{if(state.isHost&&state.roomCode)updateDesktopInvite(state.roomCode)});}
+if(window.veetDesktop?.isDesktop){document.documentElement.classList.add("vdo-desktop");window.veetDesktop.onTunnelReady(()=>{if(state.isHost&&state.roomCode)updateDesktopInvite(state.roomCode)});}
 $("copyInviteBtn")?.addEventListener("click",async()=>{
   try{await navigator.clipboard.writeText($("desktopInviteLink").value);toast("Link da sala copiado!");}
   catch{const field=$("desktopInviteLink");field.select();document.execCommand("copy");toast("Link da sala copiado!");}
