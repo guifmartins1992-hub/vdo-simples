@@ -1,6 +1,8 @@
-# VDO Simples
+# V-eet
 
-Aplicação web de salas temporárias para compartilhar a tela e ligar câmeras, sem áudio.
+**V-eet (Virtual Meet)** é o nome de teste da plataforma.
+
+Aplicação web V-eet de salas temporárias para compartilhar a tela e ligar câmeras, sem áudio.
 
 ## O que já está implementado
 - Tela inicial com criar sala e acessar sala por código.
