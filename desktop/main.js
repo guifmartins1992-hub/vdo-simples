@@ -3,8 +3,8 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const https = require("https");
-let mainWindow, tunnelProcess, tunnelUrl = "", vdoServer;
-function sendStatus(message){if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("vdo:status",message);}
+let mainWindow, tunnelProcess, tunnelUrl = "", veetServer;
+function sendStatus(message){if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("veet:status",message);}
 function downloadCloudflared(destination){
  return new Promise((resolve,reject)=>{
   const request=(url,redirects=0)=>{
@@ -24,24 +24,24 @@ async function startTunnel(){
  tunnelProcess=spawn(binary,["tunnel","--no-autoupdate","--url","http://127.0.0.1:3001"],{windowsHide:true,stdio:["ignore","pipe","pipe"]});
  const consume=chunk=>{
   const match=chunk.toString().match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
-  if(match&&!tunnelUrl){tunnelUrl=match[0];sendStatus("Conexão pública pronta.");if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("vdo:tunnel-ready",tunnelUrl);}
+  if(match&&!tunnelUrl){tunnelUrl=match[0];sendStatus("Conexão pública pronta.");if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send("veet:tunnel-ready",tunnelUrl);}
  };
  tunnelProcess.stdout.on("data",consume);tunnelProcess.stderr.on("data",consume);
  tunnelProcess.on("error",e=>sendStatus("Falha ao iniciar o túnel: "+e.message));
  tunnelProcess.on("exit",code=>{if(code&&code!==0)sendStatus("A conexão pública foi encerrada (código "+code+").");});
 }
 function createWindow(){
- mainWindow=new BrowserWindow({width:1440,height:900,minWidth:900,minHeight:620,backgroundColor:"#080b09",autoHideMenuBar:true,title:"VDO Simples",webPreferences:{preload:path.join(__dirname,"preload.js"),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ mainWindow=new BrowserWindow({width:1440,height:900,minWidth:900,minHeight:620,backgroundColor:"#080b09",autoHideMenuBar:true,title:"V-eet",webPreferences:{preload:path.join(__dirname,"preload.js"),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  mainWindow.loadURL("http://127.0.0.1:3001");mainWindow.on("closed",()=>{mainWindow=null;});
 }
-ipcMain.handle("vdo:get-invite-link",async(_event,code)=>{
+ipcMain.handle("veet:get-invite-link",async(_event,code)=>{
  if(!/^[A-Z0-9]{6}$/.test(String(code||"")))throw new Error("Código de sala inválido.");
  if(!tunnelUrl)throw new Error("A conexão pública ainda está sendo preparada.");
  return tunnelUrl+"/?room="+encodeURIComponent(code);
 });
 app.whenReady().then(async()=>{
- process.env.PORT="3001";vdoServer=require(path.join(app.getAppPath(),"server.js")).server;await new Promise(resolve=>vdoServer.listening?resolve():vdoServer.once("listening",resolve));createWindow();
- try{await startTunnel();}catch(error){sendStatus("Link público indisponível: "+error.message);dialog.showMessageBox(mainWindow,{type:"warning",title:"Conexão pública indisponível",message:"O VDO abriu, mas não conseguiu preparar o link para convidados.",detail:error.message});}
+ process.env.PORT="3001";veetServer=require(path.join(app.getAppPath(),"server.js")).server;await new Promise(resolve=>veetServer.listening?resolve():veetServer.once("listening",resolve));createWindow();
+ try{await startTunnel();}catch(error){sendStatus("Link público indisponível: "+error.message);dialog.showMessageBox(mainWindow,{type:"warning",title:"Conexão pública indisponível",message:"O V-eet abriu, mas não conseguiu preparar o link para convidados.",detail:error.message});}
 });
-app.on("before-quit",()=>{if(tunnelProcess&&!tunnelProcess.killed)tunnelProcess.kill();if(vdoServer&&vdoServer.listening)vdoServer.close();});
+app.on("before-quit",()=>{if(tunnelProcess&&!tunnelProcess.killed)tunnelProcess.kill();if(veetServer&&veetServer.listening)veetServer.close();});
 app.on("window-all-closed",()=>{if(process.platform!=="darwin")app.quit();});
