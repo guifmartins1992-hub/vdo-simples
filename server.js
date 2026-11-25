@@ -122,5 +122,5 @@ io.on("connection", socket => {
   socket.on("disconnect", () => leaveRoom(socket, "disconnect"));
 });
 
-server.listen(PORT, () => console.log(`Vdo Simples rodando na porta ${PORT}`));
+server.listen(PORT, () => console.log(`V-eet rodando na porta ${PORT}`));
 module.exports = { server, io };
