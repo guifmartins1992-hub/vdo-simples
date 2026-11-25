@@ -444,7 +444,7 @@ $("createBtn").addEventListener("click",()=>{
 $("joinBtn").addEventListener("click",()=>joinRoomByCode($("roomCode").value));
 const inviteFromUrl=new URLSearchParams(location.search).get("room");
 if(inviteFromUrl){$("roomCode").value=inviteFromUrl.toUpperCase();socket.on("connect",()=>{if(inviteFromUrl&&!state.roomCode)joinRoomByCode(inviteFromUrl)});}
-if(window.veetDesktop?.isDesktop){document.documentElement.classList.add("vdo-desktop");window.veetDesktop.onTunnelReady(()=>{if(state.isHost&&state.roomCode)updateDesktopInvite(state.roomCode)});}
+if(window.veetDesktop?.isDesktop){document.documentElement.classList.add("veet-desktop");window.veetDesktop.onTunnelReady(()=>{if(state.isHost&&state.roomCode)updateDesktopInvite(state.roomCode)});}
 $("copyInviteBtn")?.addEventListener("click",async()=>{
   try{await navigator.clipboard.writeText($("desktopInviteLink").value);toast("Link da sala copiado!");}
   catch{const field=$("desktopInviteLink");field.select();document.execCommand("copy");toast("Link da sala copiado!");}
