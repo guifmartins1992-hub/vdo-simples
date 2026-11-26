@@ -12,7 +12,7 @@ on:
       - ".github/workflows/build-windows-app.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -44,6 +44,19 @@ jobs:
           }
           Write-Host "Instalador validado: $($installer.FullName)"
           Write-Host "Tamanho: $([math]::Round($installer.Length / 1MB, 2)) MB"
+
+      - name: Publish public test download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: veet-testes
+          name: V-eet - Versão de Teste
+          prerelease: true
+          make_latest: false
+          files: dist/*.exe
+          overwrite_files: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
