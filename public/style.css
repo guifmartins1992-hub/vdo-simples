@@ -65,3 +65,24 @@
 html.veet-desktop .home-screen{min-height:100vh}
 html.veet-desktop .room-screen{height:100vh}
 @media(max-width:700px){.desktop-invite-panel{flex-wrap:wrap}.desktop-invite-copy{width:100%}.desktop-invite-panel input{flex-basis:100%}.desktop-invite-panel button{width:100%}}
+
+/* V-eet: manter no máximo duas colunas e eliminar o vão vertical entre fileiras */
+.camera-panel[data-participants="3"] .video-grid,
+.camera-panel[data-participants="4"] .video-grid,
+.camera-panel[data-participants="5"] .video-grid,
+.camera-panel[data-participants="6"] .video-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  column-gap:6px;
+  row-gap:0!important;
+}
+@media(max-width:650px){
+  .camera-panel[data-participants="2"] .video-grid,
+  .camera-panel[data-participants="3"] .video-grid,
+  .camera-panel[data-participants="4"] .video-grid,
+  .camera-panel[data-participants="5"] .video-grid,
+  .camera-panel[data-participants="6"] .video-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    column-gap:6px;
+    row-gap:0!important;
+  }
+}
